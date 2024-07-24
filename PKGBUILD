@@ -41,7 +41,6 @@ build() {
     --sysconfdir=/etc \
     --libexecdir=/usr/lib \
     --localstatedir=/var \
-    --with-json \
     --with-modules \
     --with-compress-install \
     --with-threads \
@@ -57,7 +56,7 @@ build() {
     --with-mailutils \
     --with-gsettings \
     --with-webrender \
-	  --with-pgtk \
+    --with-pgtk \
     --with-wr-gl=yes \
     --disable-build-details
 
