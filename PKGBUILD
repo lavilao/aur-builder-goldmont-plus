@@ -57,7 +57,6 @@ build() {
     --with-gsettings \
     --with-webrender \
     --with-pgtk \
-    --with-wr-gl=surfman \
     --disable-build-details
 
   make V=1 PATH="$HOME/.rustup/toolchains/${RUSTUP_TOOLCHAIN}-$(uname -m)-unknown-linux-gnu/bin:$PATH" bootstrap
