@@ -1,0 +1,62 @@
+name: Build and Release emacs-ng-git
+
+on:
+  push:
+    branches:
+      - main 
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    container: archlinux/base-devel
+    permissions: 
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: sudo pacman -Syu --noconfirm base-devel git rustup python clang texlive-core 
+
+      - name: Clone AUR helpers
+        run: |
+          git clone https://aur.archlinux.org/paru-bin.git 
+          cd paru-bin 
+          makepkg -si --noconfirm 
+          cd ..
+
+      - name: Build emacs-ng-git
+        run: |
+          cd emacs-ng-git # Change to your package directory
+          paru -S --noconfirm 
+          CFLAGS="-march=goldmont-plus" paru -U --noconfirm . 
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: emacs-ng-git
+          path: /home/runner/work/emacs-ng-git/*.pkg.tar.* 
+
+      - name: Create Release
+        id: create_release 
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        with:
+          tag_name: ${{ github.sha }} 
+          release_name: Release ${{ github.sha }} 
+          body: |
+            Automated build for commit ${{ github.sha }} 
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} 
+          asset_path: /home/runner/work/emacs-ng-git/*.pkg.tar.*
+          asset_name: emacs-ng-git-${{ github.sha }}.pkg.tar.*
+          asset_content_type: application/octet-stream
