@@ -3,6 +3,8 @@
 # Contributor: Matt Harrison <matt@harrison.us.com>
 
 ## `PKGBUILD` based on the `PKGBUILD` for the package `ollama-rocm-git`.
+CFLAGS+=" -march=goldmont-plus"
+CXXFLAGS+=" -march=goldmont-plus"
 
 ##_build_generic=true
 _build_openmpi=true
@@ -133,7 +135,7 @@ _cmake_options_common="
   -DLLAMA_ALL_WARNINGS=OFF
   -DLLAMA_ALL_WARNINGS_3RD_PARTY=OFF
   -DLLAMA_FATAL_WARNINGS=OFF
-  -DLLAMA_AVX="$(_check_cpufeature avx)" -DLLAMA_AVX2="$(_check_cpufeature avx2)" -DLLAMA_AVX512="$(_check_cpufeature avx512)" -DLLAMA_AVX512_VBMI="$(_check_cpufeature avx512vbmi)" -DLLAMA_AVX512_VNNI="$(_check_cpufeature avx512_vnni)" -DLLAMA_F16C="$(_check_cpufeature f16c)" -DLLAMA_FMA="$(_check_cpufeature fma)"
+  -DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_AVX512=OFF -DLLAMA_AVX512_VBMI=OFF -DLLAMA_AVX512_VNNI=OFF -DLLAMA_F16C=OFF -DLLAMA_FMA=OFF
   -DLLAMA_BUILD_EXAMPLES=ON -DLLAMA_BUILD_SERVER=ON -DLLAMA_BUILD_TESTS=ON
   -DLLAMA_CPU_HBM=OFF -DLLAMA_CUBLAS=OFF -DLLAMA_CUDA=OFF -DLLAMA_HIPBLAS=OFF -DLLAMA_HIP_UMA=OFF -DLLAMA_METAL=OFF -DLLAMA_SYCL=OFF -DLLAMA_KOMPUTE=OFF
   -DLLAMA_LTO="$(_check_makepkgpotion lto)"
@@ -142,7 +144,7 @@ _cmake_options_common="
 "
 _cmake_options_blas="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas"
 _cmake_options_mpi="-DLLAMA_MPI=ON"
-_cmake_options_clblas="-DLLAMA_CLBLAST=ON"
+_cmake_options_clblas="-DLLAMA_CLBLAST=OFF"
 _cmake_options_vulkan="-DLLAMA_VULKAN=ON -DLLAMA_VULKAN_CHECK_RESULTS=OFF -DLLAMA_VULKAN_DEBUG=OFF -DLLAMA_VULKAN_RUN_TESTS=OFF -DLLAMA_VULKAN_VALIDATE=OFF"
 
 prepare() {
