@@ -9,7 +9,7 @@ CXXFLAGS+=" -march=goldmont-plus"
 
 _build_generic=true
 #_build_openmpi=true
-#_build_openblas=true
+_build_openblas=true
 #_build_clblas=false # 2024-04-17: Fails to link with
                     # ```
                     # /usr/bin/ld: /var/cache/makepkg/build/ollama-git/src/ollama-clblas/llm/build/linux/x86_64_static/libllama.a(ggml-opencl.cpp.o): in function `ggml_backend_opencl_buffer_get_tensor(ggml_backend_buffer*, ggml_tensor const*, void*, unsigned long, unsigned long)':
@@ -21,6 +21,8 @@ _build_generic=true
 # Those variables skip CUDA and ROCm build, introduced in https://github.com/ollama/ollama/pull/4462/files.
 export OLLAMA_SKIP_CUDA_GENERATE=true
 export OLLAMA_SKIP_ROCM_GENERATE=true
+export CFLAGS+=" -march=goldmont-plus"
+export CXXFLAGS+=" -march=goldmont-plus"
 export ONEAPI_ROOT='/tmp/does_not_exist/this/path/should/not/exist/to/force-off/oneapi/build'
 
 _name="ollama"
@@ -132,16 +134,16 @@ _cmake_options_common="
   -DBUILD_TESTING=ON
   -DCMAKE_BUILD_TYPE=Release
   -DCMAKE_INSTALL_PREFIX=/usr
-  -DLLAMA_ACCELERATE=ON
+  -DGGML_ACCELERATE=ON
   -DLLAMA_ALL_WARNINGS=OFF
   -DLLAMA_ALL_WARNINGS_3RD_PARTY=OFF
   -DLLAMA_FATAL_WARNINGS=OFF
-  -DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_AVX512=OFF -DLLAMA_AVX512_VBMI=OFF -DLLAMA_AVX512_VNNI=OFF -DLLAMA_F16C=OFF -DLLAMA_FMA=OFF
+  -DGGML_AVX=OFF -DGGml_AVX2=OFF -DGGML_AVX512=OFF -DGGML_AVX512_VBMI=OFF -DGGML_AVX512_VNNI=OFF -DGGML_F16C=OFF -DGGML_FMA=OFF
   -DLLAMA_BUILD_EXAMPLES=ON -DLLAMA_BUILD_SERVER=ON -DLLAMA_BUILD_TESTS=ON
-  -DLLAMA_CPU_HBM=OFF -DLLAMA_CUBLAS=OFF -DLLAMA_CUDA=OFF -DLLAMA_HIPBLAS=OFF -DLLAMA_HIP_UMA=OFF -DLLAMA_METAL=OFF -DLLAMA_SYCL=OFF -DLLAMA_KOMPUTE=OFF
-  -DLLAMA_LTO="$(_check_makepkgpotion lto)"
-  -DLLAMA_GPROF=OFF -DLLAMA_PERF=OFF -DLLAMA_SANITIZE_ADDRESS=OFF -DLLAMA_SANITIZE_THREAD=OFF -DLLAMA_SANITIZE_UNDEFINED=OFF 
-  -DLLAMA_SERVER_SSL=ON -DLLAMA_SERVER_VERBOSE=ON -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DCMAKE_C_FLAGS=-march=goldmont-plus -DCMAKE_CXX_FLAGS=-march=goldmont-plus
+  -DGGML_CPU_HBM=OFF -DLLAMA_CUBLAS=OFF -DLLAMA_CUDA=OFF -DGGML_HIPBLAS=OFF -DGGML_HIP_UMA=OFF -DLLAMA_METAL=OFF -DLLAMA_SYCL=OFF -DLLAMA_KOMPUTE=OFF
+  -DGGML_LTO="$(_check_makepkgpotion lto)"
+  -DGGML_GPROF=OFF -DGGML_PERF=OFF -DLLAMA_SANITIZE_ADDRESS=OFF -DLLAMA_SANITIZE_THREAD=OFF -DLLAMA_SANITIZE_UNDEFINED=OFF 
+  -DLLAMA_SERVER_SSL=ON -DLLAMA_SERVER_VERBOSE=ON -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBlas -DCMAKE_C_FLAGS=-march=goldmont-plus -DCMAKE_CXX_FLAGS=-march=goldmont-plus
 
 "
 _cmake_options_blas="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas"
