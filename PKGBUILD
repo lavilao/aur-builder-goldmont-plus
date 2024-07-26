@@ -4,7 +4,7 @@
 
 ## `PKGBUILD` based on the `PKGBUILD` for the package `ollama-rocm-git`.
 
-_build_generic=true
+##_build_generic=true
 _build_openmpi=true
 _build_openblas=true
 _build_clblas=false # 2024-04-17: Fails to link with
