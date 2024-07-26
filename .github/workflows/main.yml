@@ -14,12 +14,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       
-      - name: Extract package name from PKGBUILD
-        id: extract_pkgname
+      - name: Extract package name and version from PKGBUILD
+        id: extract_pkginfo
         run: |
           pkgname=$(source ./PKGBUILD && echo $pkgname)
+          pkgver=$(source ./PKGBUILD && echo $pkgver)
           echo "pkgname=$pkgname" >> $GITHUB_ENV
-
+          echo "pkgver=$pkgver" >> $GITHUB_ENV
+      
       - name: Build package
         id: makepkg
         uses: CachyOS/pkgbuild-action@master 
@@ -38,11 +40,11 @@ jobs:
         id: create_release
         uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.sha }} 
-          release_name: Release ${{ github.sha }} 
-          body: Automated build for commit ${{ github.sha }} 
+          tag_name: "${{ env.pkgname }}-v${{ env.pkgver }}" # Use a combination of package name and version
+          release_name: "Release ${{ env.pkgname }}-v${{ env.pkgver }}" # Use a more descriptive release name
+          body: "Automated build for ${{ env.pkgname }} version ${{ env.pkgver }} (commit ${{ github.sha }})"
           draft: false
           prerelease: false
 
@@ -54,5 +56,5 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} 
           asset_path: "*.pkg.tar.*" # Adjust the path if necessary
-          asset_name: ${{ env.pkgname }}-${{ github.sha }}.pkg.tar.* 
+          asset_name: ${{ env.pkgname }}-v${{ env.pkgver }}.pkg.tar.* 
           asset_content_type: application/octet-stream
