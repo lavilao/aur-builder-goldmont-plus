@@ -1,4 +1,4 @@
-name: Build and Release emacs-ng-git
+name: Build and Release package
 
 on:
   push:
@@ -14,11 +14,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       
-      - name: Build emacs-ng-git
+      - name: Extract package name from PKGBUILD
+        id: extract_pkgname
+        run: |
+          pkgname=$(source ./PKGBUILD && echo $pkgname)
+          echo "pkgname=$pkgname" >> $GITHUB_ENV
+
+      - name: Build package
         id: makepkg
         uses: CachyOS/pkgbuild-action@master 
         with:
-          # Pass the CFLAGS setting to the build environment
           envvars: "CFLAGS=-march=goldmont-plus" 
           pkgdir: "."  # Assuming your PKGBUILD is in the root
           makepkgArgs: "--skipchecksums --skippgpcheck --noconfirm -s"
@@ -26,7 +31,7 @@ jobs:
       - name: Upload package artifact
         uses: actions/upload-artifact@v3
         with:
-          name: emacs-ng-git
+          name: ${{ env.pkgname }}
           path: "*.pkg.tar.*" # Adjust the path if necessary
 
       - name: Create Release
@@ -49,5 +54,5 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} 
           asset_path: "*.pkg.tar.*" # Adjust the path if necessary
-          asset_name: emacs-ng-git-${{ github.sha }}.pkg.tar.* 
+          asset_name: ${{ env.pkgname }}-${{ github.sha }}.pkg.tar.* 
           asset_content_type: application/octet-stream
