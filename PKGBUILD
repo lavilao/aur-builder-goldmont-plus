@@ -5,6 +5,7 @@
 ## `PKGBUILD` based on the `PKGBUILD` for the package `ollama-rocm-git`.
 CFLAGS+=" -march=goldmont-plus"
 CXXFLAGS+=" -march=goldmont-plus"
+GIN_MODE=release
 
 ##_build_generic=true
 _build_openmpi=true
