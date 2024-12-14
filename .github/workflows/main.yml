@@ -55,6 +55,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} 
-          asset_path: "*.zip*" # Adjust the path if necessary
+          asset_path: "*.pkg.tar.*" # Update the path to match the artifact
           asset_name: ${{ env.pkgname }}-v${{ env.pkgver }}.pkg.tar.* 
           asset_content_type: application/octet-stream
+
