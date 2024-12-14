@@ -42,7 +42,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: "${{ env.pkgname }}-v${{ env.pkgver }}" # Use a combination of package name and version
+          tag_name: "${{ env.pkgname }}-v${{ env.pkgver }}-${{ github.run_number }}" # Use a unique tag name
           release_name: "Release ${{ env.pkgname }}-v${{ env.pkgver }}" # Use a more descriptive release name
           body: "Automated build for ${{ env.pkgname }} version ${{ env.pkgver }} (commit ${{ github.sha }})"
           draft: false
@@ -58,4 +58,3 @@ jobs:
           asset_path: "*.pkg.tar.*" # Update the path to match the artifact
           asset_name: ${{ env.pkgname }}-v${{ env.pkgver }}.pkg.tar.* 
           asset_content_type: application/octet-stream
-
