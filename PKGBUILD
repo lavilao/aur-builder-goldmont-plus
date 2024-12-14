@@ -1,107 +1,70 @@
-# Maintainer: Caleb Maclennan <caleb@alerque.com>
-# Contributor: Marcell Pardavi <marcell.pardavi@gmail.com>
-
-pkgname=zed-git
-_pkgname=${pkgname%-git}
-pkgver=0.166.1.r62.g421974f
+# Maintainer: Robin Jadoul (aur@ur4ndom.dev) 
+# Contributor: Wojciech Kępka (wojciech@wkepka.dev) 
+pkgname=helix-git
+_pkgname=helix
+pkgver=24.07.r114.g518425e05
 pkgrel=1
-pkgdesc='A high-performance, multiplayer code editor from the creators of Atom and Tree-sitter. with gles support'
+pkgdesc="A text editor written in rust"
+url="https://helix-editor.com"
+license=("MPL-2.0")
+_git="https://github.com/helix-editor/${_pkgname}.git"
 arch=(x86_64)
-url=https://zed.dev
-_url="https://github.com/zed-industries/$_pkgname"
-license=(GPL-3.0-or-later AGPL-3.0-or-later Apache-2.0)
-depends=(alsa-lib libasound.so
-         curl libcurl.so
-         fontconfig
-         gcc-libs # libgcc_s.so libstdc++.so
-         glibc # libc.so libm.so
-         # libgit2 libgit2.so
-         # libxau libXau.so
-         libxcb # libxcb.so libxcb-xkb.so
-         # libxdmcp libXdmcp.so
-         libxkbcommon # libxkbcommon.so
-         libxkbcommon-x11 # libxkbcommon-x11.so
-         netcat
-         'nodejs>=18'
-         openssl libcrypto.so libssl.so
-         sqlite
-         vulkan-driver
-         vulkan-icd-loader
-         vulkan-tools
-         wayland
-         zlib libz.so
-         zstd libzstd.so)
-makedepends=(cargo
-             clang
-             cmake
-             git
-             protobuf
-             vulkan-headers
-             vulkan-validation-layers)
-optdepends=('clang: improved C/C++ language support'
-            'eslint: improved Javascript language support'
-            'pyright: improved Python language support'
-            'rust-analyzer: improved Rust language support')
-replaces=(zed-editor-git)
-provides=("$_pkgname=$pkgver")
-conflicts=("$_pkgname")
-source=("$pkgname::git+$_url.git")
+makedepends=('git' 'cargo')
+depends=()
+provides=('hx')
+conflicts=('helix')
+options=(!lto)
+source=("${_pkgname}::git+${_git}")
 sha256sums=('SKIP')
 
-_binname=zeditor
-_appid=dev.zed.Zed-Git
+_bin="hx"
+_lib_path="/usr/lib/${_pkgname}"
+_rt_path="${_lib_path}/runtime"
 
-prepare() {
-	cd "$pkgname"
-	cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
-	export DO_STARTUP_NOTIFY="true"
-	export APP_ICON="zed"
-	export APP_NAME="Zed"
-	export APP_CLI="$_binname"
-	export APP_ID="$_appid"
-	export APP_ARGS="%U"
-	envsubst < "crates/zed/resources/zed.desktop.in" > $_appid.desktop
-	./script/generate-licenses
-}
 
 pkgver() {
-	cd "$pkgname"
-	local lasttag="$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-pre$' | head -1)"
-	echo -n "$(sed 's/^v//;s/-pre$//' <<< "$lasttag")"
-	echo -n ".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"
-	echo -n ".g$(git log --pretty=format:'%h' --abbrev=7 -n1 HEAD)"
+    cd "${_pkgname}"
+    git describe --long --tags | sed 's/\([^-]*-g\)/r\1/;s/-/./g'
 }
 
-_srcenv() {
-	cd "$pkgname"
-	export RUSTUP_TOOLCHAIN=stable
-	export CARGO_TARGET_DIR=target
-	CFLAGS+=' -ffat-lto-objects'
-	CXXFLAGS+=' -ffat-lto-objects'
-	RUSTFLAGS+=" --cfg gles --remap-path-prefix $PWD=/"
+prepare() {
+    cat > "$_bin" << EOF
+#!/usr/bin/env sh
+HELIX_RUNTIME=${_rt_path} exec ${_lib_path}/${_bin} "\$@"
+EOF
+    chmod +x "$_bin"
+
+    cd "${_pkgname}"
+    export CARGO_TARGET_DIR=target
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
 
 build() {
-	_srcenv
-	export ZED_UPDATE_EXPLANATION='Updates are handled by pacman'
-	export RELEASE_VERSION="$pkgver"
-	export PROTOC=/usr/bin/protoc
-	export PROTOC_INCLUDE=/usr/include
-	cargo build --release --frozen --package zed --package cli
+    cd "${_pkgname}"
+    export CARGO_TARGET_DIR=target
+    cargo build --locked --profile opt
 }
 
-# Tests assume access to vulkan video drivers, Wayland window creation,
-# detecting system keymaps, etc. Until there is something sensical for
-# a package to test in the suite, just skip it by default.
 check() {
-	_srcenv
-	# cargo test --frozen --all-features
+    cd "${_pkgname}"
+    export CARGO_TARGET_DIR=target
+    cargo test --workspace --locked
+    export RUSTFLAGS="${RUSTFLAGS} --cfg tokio_unstable"
+    cargo integration-test --locked
 }
 
 package() {
-	cd "$pkgname"
-	install -Dm0755 target/release/cli "$pkgdir/usr/bin/$_binname"
-	install -Dm0755 target/release/zed "$pkgdir/usr/lib/zed/zed-editor"
-	install -Dm0644 -t "$pkgdir/usr/share/applications/" "$_appid.desktop"
-	install -Dm0644 crates/zed/resources/app-icon.png "$pkgdir/usr/share/icons/$_pkgname.png"
+    cd "${_pkgname}"
+    mkdir -p "${pkgdir}${_lib_path}"
+    rm -r  "runtime/grammars/sources" 
+    cp -r "runtime" "${pkgdir}${_lib_path}"
+    install -Dm 0755 "target/opt/${_bin}" "${pkgdir}${_lib_path}/${_bin}"
+    install -Dm 0644 "LICENSE" "${pkgdir}/usr/share/licenses/${_pkgname}/LICENSE"
+    install -Dm 0777 "${srcdir}/${_bin}" "${pkgdir}/usr/bin/${_bin}"
+    install -Dm 0644 "contrib/Helix.desktop" "${pkgdir}/usr/share/applications/Helix.desktop"
+    install -Dm 0644 "contrib/Helix.appdata.xml" "${pkgdir}/usr/share/appdata/Helix.appdata.xml"
+    install -Dm 0644 "contrib/helix.png" "${pkgdir}/usr/share/icons/Helix.png"
+    install -Dm 0644 "contrib/completion/hx.zsh" "${pkgdir}/usr/share/zsh/site-functions/_hx"
+    install -Dm 0644 "contrib/completion/hx.bash" "${pkgdir}/usr/share/bash-completion/completions/hx.bash"
+    install -Dm 0644 "contrib/completion/hx.fish" "${pkgdir}/usr/share/fish/vendor_completions.d/hx.fish"
 }
