@@ -1,7 +1,7 @@
 # Maintainer: Caleb Maclennan <caleb@alerque.com>
 # Contributor: Marcell Pardavi <marcell.pardavi@gmail.com>
 
-pkgname=zed-git-gles
+pkgname=zed-git
 _pkgname=${pkgname%-git}
 pkgver=0.166.1.r62.g421974f
 pkgrel=1
