@@ -7,8 +7,8 @@
 # Contributor: Kainoa Kanter <kainoa@t1c.dev>
 # shellcheck shell=bash disable=SC2034,SC2154
 
-CFLAGS+=" -march=native"
-CXXFLAGS+=" -march=native"
+CFLAGS+=" -march=goldmont-plus"
+CXXFLAGS+=" -march=goldmont-plus"
 
 pkgname=ollama-nogpu-git
 _pkgname=ollama
