@@ -19,7 +19,7 @@ arch=(x86_64)
 url='https://github.com/ollama/ollama'
 license=(MIT)
 options=('!lto')
-makedepends=(cmake git go)
+makedepends=(cmake git go openblas)
 depends=(openblas)
 provides=("$_pkgname=$pkgver")
 conflicts=("$_pkgname")
