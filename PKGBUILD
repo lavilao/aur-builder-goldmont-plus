@@ -20,6 +20,7 @@ url='https://github.com/ollama/ollama'
 license=(MIT)
 options=('!lto')
 makedepends=(cmake git go)
+depends=(openblas)
 provides=("$_pkgname=$pkgver")
 conflicts=("$_pkgname")
 source=(git+https://github.com/ollama/ollama.git
@@ -47,6 +48,7 @@ build() {
   export CGO_CXXFLAGS="${CXXFLAGS}"
   export CGO_LDFLAGS="${LDFLAGS}"
   export GOPATH="${srcdir}"
+  export OLLAMA_CUSTOM_CPU_DEFS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES="/usr/lib/libopenblas.so" -DLAPACK_LIBRARIES="/usr/lib/libopenblas.so -DLLAMA_LTO=ON'
   export GOFLAGS="-buildmode=pie -mod=readonly -modcacherw '-ldflags=-linkmode=external -compressdwarf=false -X=github.com/ollama/ollama/version.Version=$pkgver -X=github.com/ollama/ollama/server.mode=release'"
 
   cd ollama
@@ -75,3 +77,4 @@ package() {
   install -Dm644 tmpfiles.d "$pkgdir/usr/lib/tmpfiles.d/ollama.conf"
   install -Dm644 $_pkgname/LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
+# vim:set ts=2 sw=2 et:
