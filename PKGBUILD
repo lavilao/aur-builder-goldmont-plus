@@ -51,7 +51,8 @@ build() {
   export OLLAMA_CUSTOM_CPU_DEFS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES="/usr/lib/libopenblas.so" -DLAPACK_LIBRARIES="/usr/lib/libopenblas.so" -DLLAMA_LTO=ON'
   export OLLAMA_CUSTOM_CPU_FLAGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES="/usr/lib/libopenblas.so" -DLAPACK_LIBRARIES="/usr/lib/libopenblas.so" -DLLAMA_LTO=ON'
   export CUSTOM_CPU_FLAGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES="/usr/lib/libopenblas.so" -DLAPACK_LIBRARIES="/usr/lib/libopenblas.so" -DLLAMA_LTO=ON'  
-  export CMAKE_DEFS +='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES="/usr/lib/libopenblas.so" -DLAPACK_LIBRARIES="/usr/lib/libopenblas.so" -DLLAMA_LTO=ON'
+  CMAKE_DEFS+=" -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES=\"/usr/lib/libopenblas.so\" -DLAPACK_LIBRARIES=\"/usr/lib/libopenblas.so\" -DLLAMA_LTO=ON"
+  export CMAKE_DEFS
   export GGML_USE_BLAS=ON
   export GOFLAGS="-buildmode=pie -mod=readonly -modcacherw '-ldflags=-linkmode=external -compressdwarf=false -X=github.com/ollama/ollama/version.Version=$pkgver -X=github.com/ollama/ollama/server.mode=release'"
 
