@@ -59,6 +59,7 @@ build() {
   export GOFLAGS="-buildmode=pie -mod=readonly -modcacherw '-ldflags=-linkmode=external -compressdwarf=false -X=github.com/ollama/ollama/version.Version=$pkgver -X=github.com/ollama/ollama/server.mode=release'"
 
   cd ollama
+  ls -R dist
 
   # Unset these otherwise somehow nvcc will try to use them.
   unset CFLAGS CXXFLAGS
