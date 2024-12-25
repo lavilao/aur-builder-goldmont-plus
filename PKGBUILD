@@ -48,9 +48,9 @@ build() {
   export CGO_CXXFLAGS="${CXXFLAGS}"
   export CGO_LDFLAGS="${LDFLAGS}"
   export GOPATH="${srcdir}"
-  export OLLAMA_CUSTOM_CPU_DEFS='-DGGML_AVX=off -DGGML_AVX2=off -DGGML_AVX512=off -DGGML_FMA=off -DGGML_F16C=off -DCMAKE_BUILD_TYPE=Release -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES="/usr/lib/libopenblas.so" -DLAPACK_LIBRARIES="/usr/lib/libopenblas.so -DLLAMA_LTO=ON'
-  export OLLAMA_CUSTOM_CPU_FLAGS='-DGGML_AVX=off -DGGML_AVX2=off -DGGML_AVX512=off -DGGML_FMA=off -DGGML_F16C=off -DCMAKE_BUILD_TYPE=Release -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES="/usr/lib/libopenblas.so" -DLAPACK_LIBRARIES="/usr/lib/libopenblas.so -DLLAMA_LTO=ON'
-  export CUSTOM_CPU_FLAGS='-DGGML_AVX=off -DGGML_AVX2=off -DGGML_AVX512=off -DGGML_FMA=off -DGGML_F16C=off -DCMAKE_BUILD_TYPE=Release -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES="/usr/lib/libopenblas.so" -DLAPACK_LIBRARIES="/usr/lib/libopenblas.so -DLLAMA_LTO=ON'  
+  export OLLAMA_CUSTOM_CPU_DEFS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES="/usr/lib/libopenblas.so" -DLAPACK_LIBRARIES="/usr/lib/libopenblas.so -DLLAMA_LTO=ON'
+  export OLLAMA_CUSTOM_CPU_FLAGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES="/usr/lib/libopenblas.so" -DLAPACK_LIBRARIES="/usr/lib/libopenblas.so -DLLAMA_LTO=ON'
+  export CUSTOM_CPU_FLAGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES="/usr/lib/libopenblas.so" -DLAPACK_LIBRARIES="/usr/lib/libopenblas.so -DLLAMA_LTO=ON'  
   export GGML_USE_BLAS=ON
   export GOFLAGS="-buildmode=pie -mod=readonly -modcacherw '-ldflags=-linkmode=external -compressdwarf=false -X=github.com/ollama/ollama/version.Version=$pkgver -X=github.com/ollama/ollama/server.mode=release'"
 
