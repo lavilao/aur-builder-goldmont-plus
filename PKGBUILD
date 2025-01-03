@@ -1,88 +1,35 @@
+# Maintainer: Blair Bonnett <blair dot bonnett at gmail dot com>
 
-# Maintainer: envolution
-# Contributor: Alexander F. Rødseth <xyproto@archlinux.org>
-# Contributor: Sven-Hendrik Haase <svenstaro@archlinux.org>
-# Contributor: Steven Allen <steven@stebalien.com>
-# Contributor: Matt Harrison <matt@harrison.us.com>
-# Contributor: Kainoa Kanter <kainoa@t1c.dev>
-# shellcheck shell=bash disable=SC2034,SC2154
-
-CFLAGS+=" -march=goldmont-plus"
-CXXFLAGS+=" -march=goldmont-plus"
-
-pkgname=ollama-nogpu-git
-_pkgname=ollama
-pkgver=0.5.4+r3753+gffe354906
+pkgname=jupyterlab-language-pack-es-es
+pkgdesc='Spanish (Spanish) language pack for JupyterLab'
+url='https://github.com/jupyterlab/language-packs/tree/master/language-packs/jupyterlab-language-pack-es-ES'
+pkgver=4.3.post1
 pkgrel=1
-pkgdesc='Create, run and share large language models (LLMs)'
-arch=(x86_64)
-url='https://github.com/ollama/ollama'
-license=(MIT)
-options=('!lto')
-makedepends=(cmake git go openblas)
-depends=(openblas)
-provides=("$_pkgname=$pkgver")
-conflicts=("$_pkgname")
-source=(git+https://github.com/ollama/ollama.git
-  ollama-ld.conf
-  ollama.service
-  sysusers.conf
-  tmpfiles.d)
-b2sums=('SKIP'
-        '121a7854b5a7ffb60226aaf22eed1f56311ab7d0a5630579525211d5c096040edbcfd2608169a4b6d83e8b4e4855dbb22f8ebf3d52de78a34ea3d4631b7eff36'
-        '031e0809a7f564de87017401c83956d43ac29bd0e988b250585af728b952a27d139b3cad0ab1e43750e2cd3b617287d3b81efc4a70ddd61709127f68bd15eabd'
-        '3aabf135c4f18e1ad745ae8800db782b25b15305dfeaaa031b4501408ab7e7d01f66e8ebb5be59fc813cfbff6788d08d2e48dcf24ecc480a40ec9db8dbce9fec'
-        'e8f2b19e2474f30a4f984b45787950012668bf0acb5ad1ebb25cd9776925ab4a6aa927f8131ed53e35b1c71b32c504c700fe5b5145ecd25c7a8284373bb951ed')
+arch=('any')
+license=('BSD-3-Clause')
 
-pkgver() {
-  cd ollama
-  _version=$(git describe --tags --abbrev=0 | tr - .)
-  _commits=$(git rev-list --count HEAD)
-  _short_commit_hash=$(git rev-parse --short=9 HEAD)
-  echo "${_version#'v'}+r${_commits}+g${_short_commit_hash}"
-}
+makedepends=(
+  'jupyterlab-translate'
+  'python-build'
+  'python-hatchling'
+  'python-installer'
+)
+
+_pypi=jupyterlab_language_pack_de_de
+source=(
+  "https://files.pythonhosted.org/packages/source/${_pypi::1}/$_pypi/$_pypi-$pkgver.tar.gz"
+)
+sha256sums=(
+  '6764543c7c8a60bfd79e2aed7f87789242eb0ee62b28e4eb772eef8b94cf8dbe'
+)
 
 build() {
-  export CGO_CPPFLAGS="${CPPFLAGS}"
-  export CGO_CFLAGS="${CFLAGS}"
-  export CGO_CXXFLAGS="${CXXFLAGS}"
-  export CGO_LDFLAGS="${LDFLAGS}"
-  export GOPATH="${srcdir}"
-  export OLLAMA_CUSTOM_CPU_DEFS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES="/usr/lib/libopenblas.so" -DLAPACK_LIBRARIES="/usr/lib/libopenblas.so" -DLLAMA_LTO=ON'
-  export OLLAMA_CUSTOM_CPU_FLAGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES="/usr/lib/libopenblas.so" -DLAPACK_LIBRARIES="/usr/lib/libopenblas.so" -DLLAMA_LTO=ON'
-  export CUSTOM_CPU_FLAGS='-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_LIBRARIES="/usr/lib/libopenblas.so" -DLAPACK_LIBRARIES="/usr/lib/libopenblas.so" -DLLAMA_LTO=ON'  
-  CGO_CFLAGS+=" -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=openblas -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS"
-  CGO_LDFLAGS+=" -DBLAS_LIBRARIES=/usr/lib/libopenblas.so -DLAPACK_LIBRARIES=/usr/lib/libopenblas.so -DLLAMA_LTO=ON"
-  export CGO_CFLAGS
-  export CGO_LDFLAGS
-  export GGML_USE_BLAS=ON
-  export GOFLAGS="-buildmode=pie -mod=readonly -modcacherw '-ldflags=-linkmode=external -compressdwarf=false -X=github.com/ollama/ollama/version.Version=$pkgver -X=github.com/ollama/ollama/server.mode=release'"
-
-  cd ollama
-  ls -R dist
-
-  # Unset these otherwise somehow nvcc will try to use them.
-  unset CFLAGS CXXFLAGS
-  make dist
-  go build .
-}
-
-check() {
-  ollama/ollama --version >/dev/null
-  cd $_pkgname
-  go test .
+  cd "$_pypi-$pkgver"
+  python -m build --wheel --no-isolation -x
 }
 
 package() {
-  install -Dm755 $_pkgname/$_pkgname "$pkgdir/usr/bin/ollama"
-  mkdir -p "$pkgdir"/usr/lib/ollama/runners
-  cp -r ollama/dist/linux-amd64/lib/ollama/runners/cpu* "$pkgdir"/usr/lib/ollama/runners/
-
-  install -Dm755 $_pkgname/$_pkgname "$pkgdir/usr/bin/$_pkgname"
-  install -dm755 "$pkgdir/var/lib/ollama"
-  install -Dm644 ollama.service "$pkgdir/usr/lib/systemd/system/ollama.service"
-  install -Dm644 sysusers.conf "$pkgdir/usr/lib/sysusers.d/ollama.conf"
-  install -Dm644 tmpfiles.d "$pkgdir/usr/lib/tmpfiles.d/ollama.conf"
-  install -Dm644 $_pkgname/LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  cd "$_pypi-$pkgver"
+  python -m installer --destdir="$pkgdir" dist/*.whl
+  install -Dm644 LICENSE.txt -t "$pkgdir/usr/share/licenses/$pkgname"
 }
-# vim:set ts=2 sw=2 et:
