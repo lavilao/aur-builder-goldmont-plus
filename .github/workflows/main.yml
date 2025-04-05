@@ -30,20 +30,28 @@ jobs:
         mkdir -p /github/workspace/pkgbuilds
         chown -R builder:builder /github/workspace
 
+    - name: Set up git info
+      id: git_info
+      run: |
+        # Get version/tag info before changing directories
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          RELEASE_TAG=${GITHUB_REF#refs/tags/}
+          RELEASE_TITLE="Release $RELEASE_TAG"
+        else
+          cd "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          RELEASE_TAG=$(date +%Y%m%d)-$(git rev-parse --short HEAD)
+          RELEASE_TITLE="Nightly Build $RELEASE_TAG"
+          cd -
+        fi
+        echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+        echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
+
     - name: Find and build PKGBUILDs
       id: build
       run: |
         set -e
         cd "$GITHUB_WORKSPACE"
-
-        # Get version/tag info
-        if [[ $GITHUB_REF == refs/tags/* ]]; then
-          RELEASE_TAG=${GITHUB_REF#refs/tags/}
-          RELEASE_TITLE="Release $RELEASE_TAG"
-        else
-          RELEASE_TAG=$(date +%Y%m%d)-$(git rev-parse --short HEAD)
-          RELEASE_TITLE="Nightly Build $RELEASE_TAG"
-        fi
 
         echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
         echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
