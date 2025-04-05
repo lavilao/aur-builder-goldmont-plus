@@ -20,6 +20,10 @@ jobs:
 
       - name: Set up build environment
         run: |
+          # Initialize pacman keys
+          pacman-key --init
+          pacman-key --populate archlinux
+          # Update system and install dependencies
           pacman -Syu --noconfirm --needed base-devel git sudo
           useradd -m builder
           # Allow builder to run pacman for dependencies without password
