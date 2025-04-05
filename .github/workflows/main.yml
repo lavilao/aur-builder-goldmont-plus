@@ -14,7 +14,8 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Needed for git tag detection
+        fetch-depth: 0
+        path: ${{ github.workspace }}
 
     - name: Set up build environment
       run: |
@@ -33,7 +34,7 @@ jobs:
       id: build
       run: |
         set -e
-        cd /github/workspace
+        cd "$GITHUB_WORKSPACE"
 
         # Get version/tag info
         if [[ $GITHUB_REF == refs/tags/* ]]; then
