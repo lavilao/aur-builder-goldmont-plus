@@ -47,23 +47,27 @@ jobs:
         echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
         echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
 
-        # Find all PKGBUILD files
-        find . -name PKGBUILD -print0 | while IFS= read -r -d '' pkgbuild; do
+        # Find and build all PKGBUILD files
+        for pkgbuild in $(find . -name PKGBUILD); do
           dir="$(dirname "$pkgbuild")"
-          pkgname="$(basename "$dir")"
+          pkgname="$(basename "$(realpath "$dir")")"
 
           echo "::group::Building $pkgname"
 
-          # Copy to build directory
-          mkdir -p "/tmp/build/$pkgname"
-          cp -r "$dir"/* "/tmp/build/$pkgname/"
-          chown -R builder:builder "/tmp/build/$pkgname"
+          # Create clean build directory
+          build_dir="/tmp/build/$pkgname"
+          rm -rf "$build_dir"
+          mkdir -p "$build_dir"
 
-          # Build package as builder user
-          cd "/tmp/build/$pkgname"
+          # Copy files
+          cp -r "$dir"/* "$build_dir/"
+          chown -R builder:builder "$build_dir"
+
+          # Build package
+          cd "$build_dir"
           sudo -u builder makepkg -s --noconfirm --needed --cleanbuild
 
-          # Move built packages to workspace
+          # Move built packages
           mkdir -p "/github/workspace/pkgbuilds/$pkgname"
           mv ./*.pkg.tar.zst "/github/workspace/pkgbuilds/$pkgname/"
 
@@ -89,6 +93,5 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./pkgbuilds/${{ matrix.pkgname }}/*.pkg.tar.zst
-        asset_name: ${{ matrix.pkgname }}.pkg.tar.zst
+        asset_path: ./pkgbuilds/**/*.pkg.tar.zst
         asset_content_type: application/zstd
