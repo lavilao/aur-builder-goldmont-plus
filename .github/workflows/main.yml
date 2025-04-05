@@ -1,19 +1,20 @@
-name: Build Arch Linux Packages
+name: Build and Release Arch Linux Packages
 
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    tags: [ "v*" ]  # Trigger releases on version tags
 
 jobs:
-  build-packages:
+  build-and-release:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Needed for git tag detection
 
     - name: Set up build environment
       run: |
@@ -29,9 +30,22 @@ jobs:
         chown -R builder:builder /github/workspace
 
     - name: Find and build PKGBUILDs
+      id: build
       run: |
         set -e
         cd /github/workspace
+        
+        # Get version/tag info
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          RELEASE_TAG=${GITHUB_REF#refs/tags/}
+          RELEASE_TITLE="Release $RELEASE_TAG"
+        else
+          RELEASE_TAG=$(date +%Y%m%d)-$(git rev-parse --short HEAD)
+          RELEASE_TITLE="Nightly Build $RELEASE_TAG"
+        fi
+        
+        echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+        echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
         
         # Find all PKGBUILD files
         find . -name PKGBUILD -print0 | while IFS= read -r -d '' pkgbuild; do
@@ -56,10 +70,25 @@ jobs:
           echo "::endgroup::"
         done
 
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      if: success()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        name: built-packages
-        path: pkgbuilds/
-        if-no-files-found: error
-        retention-days: 1
+        tag_name: ${{ env.RELEASE_TAG }}
+        release_name: ${{ env.RELEASE_TITLE }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Assets
+      uses: actions/upload-release-asset@v1
+      if: success()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./pkgbuilds/${{ matrix.pkgname }}/*.pkg.tar.zst
+        asset_name: ${{ matrix.pkgname }}.pkg.tar.zst
+        asset_content_type: application/zstd
