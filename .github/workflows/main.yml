@@ -3,118 +3,125 @@ name: Build and Release Arch Linux Packages
 on:
   push:
     branches: [ "main" ]
-    tags: [ "v*" ]  # Trigger releases on version tags
+    tags: [ "v*" ]
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
+    permissions: # Needed for create-release and upload-release-asset
+      contents: write
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        path: ${{ github.workspace }}
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed for git history for nightly builds
 
-    - name: Set up build environment
-      run: |
-        # Update system and install dependencies
-        pacman -Syu --noconfirm --needed base-devel git sudo
+      - name: Set up build environment
+        run: |
+          pacman -Syu --noconfirm --needed base-devel git sudo
+          useradd -m builder
+          # Allow builder to run pacman for dependencies without password
+          echo "builder ALL=(ALL) NOPASSWD: /usr/bin/pacman" >> /etc/sudoers
+          # Grant builder ownership of the workspace
+          chown -R builder:builder ${{ github.workspace }}
 
-        # Create build user
-        useradd -m builder
-        echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+      - name: Determine Release Info
+        id: release_info
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            RELEASE_TAG=${GITHUB_REF#refs/tags/}
+            RELEASE_TITLE="Release $RELEASE_TAG"
+            IS_TAG_RELEASE="true"
+          else
+            cd "$GITHUB_WORKSPACE"
+            RELEASE_TAG="nightly-$(date +%Y%m%d)-$(git rev-parse --short HEAD)"
+            RELEASE_TITLE="Nightly Build $RELEASE_TAG"
+            IS_TAG_RELEASE="false"
+          fi
+          echo "tag=${RELEASE_TAG}" >> $GITHUB_OUTPUT
+          echo "title=${RELEASE_TITLE}" >> $GITHUB_OUTPUT
+          echo "is_tag_release=${IS_TAG_RELEASE}" >> $GITHUB_OUTPUT
+        shell: bash
 
-        # Set up build directory
-        mkdir -p /github/workspace/pkgbuilds
-        chown -R builder:builder /github/workspace
+      - name: Build Packages
+        id: build
+        run: |
+          set -e
+          ARTIFACTS_DIR="${{ github.workspace }}/artifacts"
+          mkdir -p "$ARTIFACTS_DIR"
+          chown builder:builder "$ARTIFACTS_DIR" # Ensure builder owns artifact dir
+          cd "$GITHUB_WORKSPACE"
 
-    - name: Set up git info
-      id: git_info
-      run: |
-        # Get version/tag info
-        if [[ $GITHUB_REF == refs/tags/* ]]; then
-          RELEASE_TAG=${GITHUB_REF#refs/tags/}
-          RELEASE_TITLE="Release $RELEASE_TAG"
-        else
-          # Generate nightly build tag
-          cd "$GITHUB_WORKSPACE" # Ensure we are in the correct directory
-          RELEASE_TAG=$(date +%Y%m%d)-$(git rev-parse --short HEAD)
-          RELEASE_TITLE="Nightly Build $RELEASE_TAG"
-        fi
-        echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
-        echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
+          PKGBUILDS=$(find . -name PKGBUILD -print)
+          if [ -z "$PKGBUILDS" ]; then
+            echo "::warning::No PKGBUILD files found."
+            echo "packages_built=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
-    - name: Find and build PKGBUILDs
-      id: build
-      run: |
-        set -e
-        cd "$GITHUB_WORKSPACE"
+          PACKAGES_BUILT_FLAG=false
+          for pkgbuild_path in $PKGBUILDS; do
+            dir=$(dirname "$pkgbuild_path")
+            pkgname=$(basename "$dir") # Assuming directory name is package name
+            echo "::group::Building $pkgname from $dir"
+            cd "$dir"
+            # Run makepkg as the builder user
+            # -s: sync dependencies
+            # -f: force build even if package exists
+            # -C: clean build directory before building (replaces --cleanbuild)
+            # -c: clean up work files after build
+            # --noconfirm: don't ask for confirmation
+            # --needed: don't reinstall dependencies if already up-to-date
+            sudo -u builder PKGDEST="$ARTIFACTS_DIR" makepkg -sfCc --noconfirm --needed
 
-        echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
-        echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
+            # Check if packages were actually created in PKGDEST by makepkg
+            if compgen -G "$ARTIFACTS_DIR/$pkgname"*.pkg.tar.* > /dev/null; then
+              PACKAGES_BUILT_FLAG=true
+              echo "Successfully built packages for $pkgname moved to $ARTIFACTS_DIR"
+            else
+              echo "::warning::No packages found in $ARTIFACTS_DIR for $pkgname after build."
+            fi
 
-        # Debug: Show directory structure
-        echo "::group::Current directory structure"
-        find . -type d -exec ls -ld {} \;
-        echo "::endgroup::"
+            cd "$GITHUB_WORKSPACE" # Go back to workspace root for next find iteration
+            echo "::endgroup::"
+          done
 
-        # Debug: Show PKGBUILD search
-        echo "::group::PKGBUILD search results"
-        find . -name PKGBUILD -print
-        echo "::endgroup::"
+          # Set output based on whether any package was built
+          if [ "$PACKAGES_BUILT_FLAG" = true ]; then
+             echo "Packages built:"
+             ls -l "$ARTIFACTS_DIR"
+             echo "packages_built=true" >> $GITHUB_OUTPUT
+          else
+             echo "::warning::No packages were successfully built."
+             echo "packages_built=false" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
 
-        # Find and build all PKGBUILD files
-        for pkgbuild in $(find . -name PKGBUILD); do
-          echo "::debug::Found PKGBUILD at $pkgbuild"
-          dir="$(dirname "$pkgbuild")"
-          echo "::debug::PKGBUILD directory: $dir"
-          pkgname="$(basename "$(realpath "$dir")")"
-          echo "::debug::Package name resolved to: $pkgname"
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        # Only create a release if packages were actually built
+        if: success() && steps.build.outputs.packages_built == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.release_info.outputs.tag }}
+          release_name: ${{ steps.release_info.outputs.title }}
+          draft: false
+          # Mark nightly builds as pre-releases
+          prerelease: ${{ steps.release_info.outputs.is_tag_release == 'false' }}
 
-          echo "::group::Building $pkgname"
-
-          # Create clean build directory
-          build_dir="/tmp/build/$pkgname"
-          rm -rf "$build_dir"
-          mkdir -p "$build_dir"
-
-          # Copy files
-          cp -r "$dir"/* "$build_dir/"
-          chown -R builder:builder "$build_dir"
-
-          # Build package
-          cd "$build_dir"
-          sudo -u builder makepkg -s --noconfirm --needed --cleanbuild
-
-          # Move built packages
-          mkdir -p "/github/workspace/pkgbuilds/$pkgname"
-          echo "::debug::Moving packages to /github/workspace/pkgbuilds/$pkgname/"
-          ls -la *.pkg.tar.zst || echo "::warning::No packages were built"
-          mv -v ./*.pkg.tar.zst "/github/workspace/pkgbuilds/$pkgname/"
-
-          echo "::endgroup::"
-        done
-
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      if: success()
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ env.RELEASE_TAG }}
-        release_name: ${{ env.RELEASE_TITLE }}
-        draft: false
-        prerelease: false
-
-    - name: Upload Release Assets
-      uses: actions/upload-release-asset@v1
-      if: success()
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./pkgbuilds/**/*.pkg.tar.zst
-        asset_content_type: application/zstd
+      - name: Upload Release Assets
+        uses: actions/upload-release-asset@v1.0.2 # Use specific version
+        # Only upload if release was created
+        if: success() && steps.create_release.outputs.upload_url != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          # Use a glob pattern relative to the workspace root to find assets in the artifacts dir
+          asset_path: ${{ github.workspace }}/artifacts/*.pkg.tar.*
+          # Use a generic content type; GitHub often identifies it correctly based on extension
+          asset_content_type: application/octet-stream
