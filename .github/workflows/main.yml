@@ -20,11 +20,11 @@ jobs:
       run: |
         # Update system and install dependencies
         pacman -Syu --noconfirm --needed base-devel git sudo
-        
+
         # Create build user
         useradd -m builder
         echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-        
+
         # Set up build directory
         mkdir -p /github/workspace/pkgbuilds
         chown -R builder:builder /github/workspace
@@ -34,7 +34,7 @@ jobs:
       run: |
         set -e
         cd /github/workspace
-        
+
         # Get version/tag info
         if [[ $GITHUB_REF == refs/tags/* ]]; then
           RELEASE_TAG=${GITHUB_REF#refs/tags/}
@@ -43,30 +43,30 @@ jobs:
           RELEASE_TAG=$(date +%Y%m%d)-$(git rev-parse --short HEAD)
           RELEASE_TITLE="Nightly Build $RELEASE_TAG"
         fi
-        
+
         echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
         echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
-        
+
         # Find all PKGBUILD files
         find . -name PKGBUILD -print0 | while IFS= read -r -d '' pkgbuild; do
           dir="$(dirname "$pkgbuild")"
           pkgname="$(basename "$dir")"
-          
+
           echo "::group::Building $pkgname"
-          
+
           # Copy to build directory
           mkdir -p "/tmp/build/$pkgname"
           cp -r "$dir"/* "/tmp/build/$pkgname/"
           chown -R builder:builder "/tmp/build/$pkgname"
-          
+
           # Build package as builder user
           cd "/tmp/build/$pkgname"
           sudo -u builder makepkg -s --noconfirm --needed --cleanbuild
-          
+
           # Move built packages to workspace
           mkdir -p "/github/workspace/pkgbuilds/$pkgname"
           mv ./*.pkg.tar.zst "/github/workspace/pkgbuilds/$pkgname/"
-          
+
           echo "::endgroup::"
         done
 
