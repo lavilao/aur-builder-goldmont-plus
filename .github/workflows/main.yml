@@ -47,10 +47,23 @@ jobs:
         echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
         echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
 
+        # Debug: Show directory structure
+        echo "::group::Current directory structure"
+        find . -type d -exec ls -ld {} \;
+        echo "::endgroup::"
+
+        # Debug: Show PKGBUILD search
+        echo "::group::PKGBUILD search results"
+        find . -name PKGBUILD -print
+        echo "::endgroup::"
+
         # Find and build all PKGBUILD files
         for pkgbuild in $(find . -name PKGBUILD); do
+          echo "::debug::Found PKGBUILD at $pkgbuild"
           dir="$(dirname "$pkgbuild")"
+          echo "::debug::PKGBUILD directory: $dir"
           pkgname="$(basename "$(realpath "$dir")")"
+          echo "::debug::Package name resolved to: $pkgname"
 
           echo "::group::Building $pkgname"
 
@@ -69,7 +82,9 @@ jobs:
 
           # Move built packages
           mkdir -p "/github/workspace/pkgbuilds/$pkgname"
-          mv ./*.pkg.tar.zst "/github/workspace/pkgbuilds/$pkgname/"
+          echo "::debug::Moving packages to /github/workspace/pkgbuilds/$pkgname/"
+          ls -la *.pkg.tar.zst || echo "::warning::No packages were built"
+          mv -v ./*.pkg.tar.zst "/github/workspace/pkgbuilds/$pkgname/"
 
           echo "::endgroup::"
         done
