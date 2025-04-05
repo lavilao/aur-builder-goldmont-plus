@@ -33,16 +33,21 @@ jobs:
     - name: Set up git info
       id: git_info
       run: |
-        # Get version/tag info before changing directories
+        # Get version/tag info
         if [[ $GITHUB_REF == refs/tags/* ]]; then
           RELEASE_TAG=${GITHUB_REF#refs/tags/}
           RELEASE_TITLE="Release $RELEASE_TAG"
         else
+          # Initialize git info in workspace
           cd "$GITHUB_WORKSPACE"
+          git init -q
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY"
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout -q FETCH_HEAD
+          
           RELEASE_TAG=$(date +%Y%m%d)-$(git rev-parse --short HEAD)
           RELEASE_TITLE="Nightly Build $RELEASE_TAG"
-          cd -
         fi
         echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
         echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
