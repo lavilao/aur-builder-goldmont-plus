@@ -51,7 +51,7 @@ jobs:
             RELEASE_TITLE="Release $RELEASE_TAG"
             IS_TAG_RELEASE="true"
           else
-            RELEASE_TAG="nightly-$(date +%Y%m%d)-$(git rev-parse --short HEAD)"
+            RELEASE_TAG="nightly-$(date +%Y%m%d)"
             RELEASE_TITLE="Nightly Build $RELEASE_TAG"
             IS_TAG_RELEASE="false"
           fi
@@ -67,44 +67,32 @@ jobs:
           set -e
           ARTIFACTS_DIR="${{ github.workspace }}/artifacts"
           mkdir -p "$ARTIFACTS_DIR"
-          chown builder:builder "$ARTIFACTS_DIR" # Ensure builder owns artifact dir
-          cd "$GITHUB_WORKSPACE"
-
+          chown builder:builder "$ARTIFACTS_DIR"
+          export CFLAGS="-march=goldmont-plus -O2 -pipe -fno-plt"
+          export CXXFLAGS="-march=goldmont-plus -O2 -pipe -fno-plt"
+          export MAKEFLAGS="-j$(nproc)"
           PKGBUILDS=$(find . -name PKGBUILD -print)
           if [ -z "$PKGBUILDS" ]; then
             echo "::warning::No PKGBUILD files found."
             echo "packages_built=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-
           PACKAGES_BUILT_FLAG=false
           for pkgbuild_path in $PKGBUILDS; do
             dir=$(dirname "$pkgbuild_path")
-            pkgname=$(basename "$dir") # Assuming directory name is package name
+            pkgname=$(basename "$dir")
             echo "::group::Building $pkgname from $dir"
             cd "$dir"
-            # Run makepkg as the builder user
-            # -s: sync dependencies
-            # -f: force build even if package exists
-            # -C: clean build directory before building (replaces --cleanbuild)
-            # -c: clean up work files after build
-            # --noconfirm: don't ask for confirmation
-            # --needed: don't reinstall dependencies if already up-to-date
             sudo -u builder PKGDEST="$ARTIFACTS_DIR" makepkg -sfCc --noconfirm --needed
-
-            # Check if packages were actually created in PKGDEST by makepkg
             if compgen -G "$ARTIFACTS_DIR/$pkgname"*.pkg.tar.* > /dev/null; then
               PACKAGES_BUILT_FLAG=true
               echo "Successfully built packages for $pkgname moved to $ARTIFACTS_DIR"
             else
               echo "::warning::No packages found in $ARTIFACTS_DIR for $pkgname after build."
             fi
-
-            cd "$GITHUB_WORKSPACE" # Go back to workspace root for next find iteration
+            cd -
             echo "::endgroup::"
           done
-
-          # Set output based on whether any package was built
           if [ "$PACKAGES_BUILT_FLAG" = true ]; then
              echo "Packages built:"
              ls -l "$ARTIFACTS_DIR"
