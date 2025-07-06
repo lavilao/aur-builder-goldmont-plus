@@ -1,3 +1,4 @@
+
 name: Build and Release Arch Linux Packages
 
 on:
@@ -8,129 +9,55 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
-    permissions: # Needed for create-release and upload-release-asset
+    permissions:
       contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Needed for git history for nightly builds
+          fetch-depth: 0
 
-      - name: Set up build environment
+      - name: Extract package name and version from PKGBUILD
+        id: extract_pkginfo
         run: |
-          # Initialize pacman keys
-          pacman-key --init
-          pacman-key --populate archlinux
-          # Update system and install dependencies
-          pacman -Syu --noconfirm --needed base-devel git sudo
-          useradd -m builder
-          # Allow builder to run pacman for dependencies without password
-          echo "builder ALL=(ALL) NOPASSWD: /usr/bin/pacman" >> /etc/sudoers
-          # Ensure workspace exists before chown (create if missing)
-          if [ ! -d "${{ github.workspace }}" ]; then
-            echo "Workspace directory ${{ github.workspace }} not found! Creating it manually."
-            mkdir -p "${{ github.workspace }}"
-          fi
-          echo "Listing workspace directory before chown:"
-          ls -ld ${{ github.workspace }}
-          # Grant builder ownership of the workspace
-          echo "Attempting to change ownership of ${{ github.workspace }} to builder"
-          chown -R builder:builder ${{ github.workspace }}
-          echo "Ownership change command executed."
-          # Verify ownership change
-          echo "Listing workspace directory after chown:"
-          ls -ld ${{ github.workspace }}
+          pkgname=$(source ./PKGBUILD && echo $pkgname)
+          pkgver=$(source ./PKGBUILD && echo $pkgver)
+          echo "pkgname=$pkgname" >> $GITHUB_ENV
+          echo "pkgver=$pkgver" >> $GITHUB_ENV
 
-      - name: Determine Release Info
-        id: release_info
-        run: |
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            RELEASE_TAG=${GITHUB_REF#refs/tags/}
-            RELEASE_TITLE="Release $RELEASE_TAG"
-            IS_TAG_RELEASE="true"
-          else
-            RELEASE_TAG="nightly-$(date +%Y%m%d)"
-            RELEASE_TITLE="Nightly Build $RELEASE_TAG"
-            IS_TAG_RELEASE="false"
-          fi
-          echo "tag=${RELEASE_TAG}" >> $GITHUB_OUTPUT
-          echo "title=${RELEASE_TITLE}" >> $GITHUB_OUTPUT
-          echo "is_tag_release=${IS_TAG_RELEASE}" >> $GITHUB_OUTPUT
-        shell: bash
-        working-directory: ${{ github.workspace }}
+      - name: Build package
+        id: makepkg
+        uses: CachyOS/pkgbuild-action@master
+        with:
+          envvars: "CFLAGS=-march=goldmont-plus"
+          pkgdir: "."
+          makepkgArgs: "--skipchecksums --skippgpcheck --noconfirm -s"
 
-      - name: Build Packages
-        id: build
-        run: |
-          set -e
-          ARTIFACTS_DIR="/tmp/artifacts"
-          BUILDDIR="/tmp/builddir"
-          SRCDEST="/tmp/srcdest"
-          SRCPKGDEST="/tmp/srcpkgdest"
-          LOGDEST="/tmp/logdest"
-          for d in "$ARTIFACTS_DIR" "$BUILDDIR" "$SRCDEST" "$SRCPKGDEST" "$LOGDEST"; do
-            mkdir -p "$d"
-            chown builder:builder "$d"
-          done
-          export CFLAGS="-march=goldmont-plus -O2 -pipe -fno-plt"
-          export CXXFLAGS="-march=goldmont-plus -O2 -pipe -fno-plt"
-          export MAKEFLAGS="-j$(nproc)"
-          PKGBUILDS=$(find . -name PKGBUILD -print)
-          if [ -z "$PKGBUILDS" ]; then
-            echo "::warning::No PKGBUILD files found."
-            echo "packages_built=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          PACKAGES_BUILT_FLAG=false
-          for pkgbuild_path in $PKGBUILDS; do
-            dir=$(dirname "$pkgbuild_path")
-            pkgname=$(basename "$dir")
-            echo "::group::Building $pkgname from $dir"
-            cd "$dir"
-            sudo -u builder env PKGDEST="$ARTIFACTS_DIR" BUILDDIR="$BUILDDIR" SRCDEST="$SRCDEST" SRCPKGDEST="$SRCPKGDEST" LOGDEST="$LOGDEST" makepkg -sfCc --noconfirm --needed
-            if compgen -G "$ARTIFACTS_DIR/$pkgname"*.pkg.tar.* > /dev/null; then
-              PACKAGES_BUILT_FLAG=true
-              echo "Successfully built packages for $pkgname moved to $ARTIFACTS_DIR"
-            else
-              echo "::warning::No packages found in $ARTIFACTS_DIR for $pkgname after build."
-            fi
-            cd -
-            echo "::endgroup::"
-          done
-          if [ "$PACKAGES_BUILT_FLAG" = true ]; then
-             echo "Packages built:"
-             ls -l "$ARTIFACTS_DIR"
-             echo "packages_built=true" >> $GITHUB_OUTPUT
-          else
-             echo "::warning::No packages were successfully built."
-             echo "packages_built=false" >> $GITHUB_OUTPUT
-          fi
-        shell: bash
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.pkgname }}
+          path: "*.pkg.tar.*"
 
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
-        # Only create a release if packages were actually built
-        if: success() && steps.build.outputs.packages_built == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.release_info.outputs.tag }}
-          release_name: ${{ steps.release_info.outputs.title }}
+          tag_name: "${{ env.pkgname }}-v${{ env.pkgver }}-${{ github.run_number }}"
+          release_name: "Release ${{ env.pkgname }}-v${{ env.pkgver }}"
+          body: "Automated build for ${{ env.pkgname }} version ${{ env.pkgver }} (commit ${{ github.sha }})"
           draft: false
-          # Mark nightly builds as pre-releases
-          prerelease: ${{ steps.release_info.outputs.is_tag_release == 'false' }}
+          prerelease: false
 
-      - name: Upload Release Assets
-        uses: actions/upload-release-asset@v1.0.2 # Use specific version
-        # Only upload if release was created
-        if: success() && steps.create_release.outputs.upload_url != ''
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/artifacts/*.pkg.tar.*
-          asset_name: "$(basename ${{ github.workspace }}/artifacts/*.pkg.tar.*)"
+          asset_path: "*.pkg.tar.*"
+          asset_name: ${{ env.pkgname }}-v${{ env.pkgver }}.pkg.tar.*
           asset_content_type: application/octet-stream
