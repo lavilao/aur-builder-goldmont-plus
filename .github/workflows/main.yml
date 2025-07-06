@@ -51,7 +51,6 @@ jobs:
             RELEASE_TITLE="Release $RELEASE_TAG"
             IS_TAG_RELEASE="true"
           else
-            cd "$GITHUB_WORKSPACE"
             RELEASE_TAG="nightly-$(date +%Y%m%d)-$(git rev-parse --short HEAD)"
             RELEASE_TITLE="Nightly Build $RELEASE_TAG"
             IS_TAG_RELEASE="false"
@@ -60,6 +59,7 @@ jobs:
           echo "title=${RELEASE_TITLE}" >> $GITHUB_OUTPUT
           echo "is_tag_release=${IS_TAG_RELEASE}" >> $GITHUB_OUTPUT
         shell: bash
+        working-directory: ${{ github.workspace }}
 
       - name: Build Packages
         id: build
