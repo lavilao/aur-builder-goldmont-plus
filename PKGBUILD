@@ -97,5 +97,5 @@ _package() {
 
 sha256sums=('SKIP'
 	'SKIP'
-	'53fa70cfe40cb8a3ca432590e4f76561df0f129a31b121c9b4b34af0da7c4d87'
-	'c1f25cb01825d951b76fb4747f5bd49a85b9bee8f605b1f43c5e6f12156cf49d')
+	'SKIP'
+	'SKIP')
