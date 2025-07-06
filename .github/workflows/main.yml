@@ -28,9 +28,13 @@ jobs:
           useradd -m builder
           # Allow builder to run pacman for dependencies without password
           echo "builder ALL=(ALL) NOPASSWD: /usr/bin/pacman" >> /etc/sudoers
-          # Verify workspace exists before chown
+          # Ensure workspace exists before chown (create if missing)
+          if [ ! -d "${{ github.workspace }}" ]; then
+            echo "Workspace directory ${{ github.workspace }} not found! Creating it manually."
+            mkdir -p "${{ github.workspace }}"
+          fi
           echo "Listing workspace directory before chown:"
-          ls -ld ${{ github.workspace }} || echo "Workspace directory ${{ github.workspace }} not found!"
+          ls -ld ${{ github.workspace }}
           # Grant builder ownership of the workspace
           echo "Attempting to change ownership of ${{ github.workspace }} to builder"
           chown -R builder:builder ${{ github.workspace }}
@@ -133,7 +137,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          # Use a glob pattern relative to the workspace root to find assets in the artifacts dir
           asset_path: ${{ github.workspace }}/artifacts/*.pkg.tar.*
-          # Use a generic content type; GitHub often identifies it correctly based on extension
+          asset_name: "$(basename ${{ github.workspace }}/artifacts/*.pkg.tar.*)"
           asset_content_type: application/octet-stream
