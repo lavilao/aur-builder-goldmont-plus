@@ -71,6 +71,9 @@ jobs:
           export CFLAGS="-march=goldmont-plus -O2 -pipe -fno-plt"
           export CXXFLAGS="-march=goldmont-plus -O2 -pipe -fno-plt"
           export MAKEFLAGS="-j$(nproc)"
+          export BUILDDIR="/tmp/builddir"
+          mkdir -p "$BUILDDIR"
+          chown builder:builder "$BUILDDIR"
           PKGBUILDS=$(find . -name PKGBUILD -print)
           if [ -z "$PKGBUILDS" ]; then
             echo "::warning::No PKGBUILD files found."
