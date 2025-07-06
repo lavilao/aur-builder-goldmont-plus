@@ -89,7 +89,7 @@ jobs:
             pkgname=$(basename "$dir")
             echo "::group::Building $pkgname from $dir"
             cd "$dir"
-            sudo -u builder PKGDEST="$ARTIFACTS_DIR" BUILDDIR="$BUILDDIR" SRCDEST="$SRCDEST" SRCPKGDEST="$SRCPKGDEST" LOGDEST="$LOGDEST" makepkg -sfCc --noconfirm --needed
+            sudo -u builder env PKGDEST="$ARTIFACTS_DIR" BUILDDIR="$BUILDDIR" SRCDEST="$SRCDEST" SRCPKGDEST="$SRCPKGDEST" LOGDEST="$LOGDEST" makepkg -sfCc --noconfirm --needed
             if compgen -G "$ARTIFACTS_DIR/$pkgname"*.pkg.tar.* > /dev/null; then
               PACKAGES_BUILT_FLAG=true
               echo "Successfully built packages for $pkgname moved to $ARTIFACTS_DIR"
