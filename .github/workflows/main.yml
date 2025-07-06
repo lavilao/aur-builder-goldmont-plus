@@ -65,15 +65,18 @@ jobs:
         id: build
         run: |
           set -e
-          ARTIFACTS_DIR="${{ github.workspace }}/artifacts"
-          mkdir -p "$ARTIFACTS_DIR"
-          chown builder:builder "$ARTIFACTS_DIR"
+          ARTIFACTS_DIR="/tmp/artifacts"
+          BUILDDIR="/tmp/builddir"
+          SRCDEST="/tmp/srcdest"
+          SRCPKGDEST="/tmp/srcpkgdest"
+          LOGDEST="/tmp/logdest"
+          for d in "$ARTIFACTS_DIR" "$BUILDDIR" "$SRCDEST" "$SRCPKGDEST" "$LOGDEST"; do
+            mkdir -p "$d"
+            chown builder:builder "$d"
+          done
           export CFLAGS="-march=goldmont-plus -O2 -pipe -fno-plt"
           export CXXFLAGS="-march=goldmont-plus -O2 -pipe -fno-plt"
           export MAKEFLAGS="-j$(nproc)"
-          export BUILDDIR="/tmp/builddir"
-          mkdir -p "$BUILDDIR"
-          chown builder:builder "$BUILDDIR"
           PKGBUILDS=$(find . -name PKGBUILD -print)
           if [ -z "$PKGBUILDS" ]; then
             echo "::warning::No PKGBUILD files found."
@@ -86,7 +89,7 @@ jobs:
             pkgname=$(basename "$dir")
             echo "::group::Building $pkgname from $dir"
             cd "$dir"
-            sudo -u builder PKGDEST="$ARTIFACTS_DIR" BUILDDIR="$BUILDDIR" makepkg -sfCc --noconfirm --needed
+            sudo -u builder PKGDEST="$ARTIFACTS_DIR" BUILDDIR="$BUILDDIR" SRCDEST="$SRCDEST" SRCPKGDEST="$SRCPKGDEST" LOGDEST="$LOGDEST" makepkg -sfCc --noconfirm --needed
             if compgen -G "$ARTIFACTS_DIR/$pkgname"*.pkg.tar.* > /dev/null; then
               PACKAGES_BUILT_FLAG=true
               echo "Successfully built packages for $pkgname moved to $ARTIFACTS_DIR"
