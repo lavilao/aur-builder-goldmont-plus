@@ -79,7 +79,7 @@ _srcenv() {
 	export CARGO_TARGET_DIR=target
 	CFLAGS+=' -march=goldmont-plus -mtune=goldmont-plus -ffat-lto-objects'
 	CXXFLAGS+=' -march=goldmont-plus -mtune=goldmont-plus -ffat-lto-objects'
-	RUSTFLAGS+=" --cfg gles --remap-path-prefix $PWD=/"
+	RUSTFLAGS+=" --remap-path-prefix $PWD=/"
 }
 
 build() {
