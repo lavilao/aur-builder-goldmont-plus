@@ -34,7 +34,7 @@ jobs:
           makepkgArgs: "--skipchecksums --skippgpcheck --noconfirm -s"
 
       - name: Upload package artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.pkgname }}
           path: "*.pkg.tar.*"
