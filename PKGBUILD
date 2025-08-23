@@ -1,101 +1,108 @@
-# Maintainer: robertfoster
+# Maintainer: Caleb Maclennan <caleb@alerque.com>
+# Contributor: Marcell Pardavi <marcell.pardavi@gmail.com>
 
-CFLAGS+=" -march=goldmont-plus -mtune=goldmont-plus"
-CXXFLAGS+=" -march=goldmont-plus -mtune=goldmont-plus"
-
-_name=llama.cpp
-pkgbase="${_name}-git"
-pkgname=(
-	"${pkgbase}"
-)
-pkgver=b4879
+pkgname=zed-git
+_pkgname=${pkgname%-git}
+pkgver=0.186.7.r183.ga1d8e50
 pkgrel=1
-pkgdesc="Port of Facebook's LLaMA model in C/C++"
-arch=('armv7h' 'aarch64' 'x86_64')
-url="https://github.com/ggerganov/llama.cpp"
-license=("MIT")
-depends=()
-makedepends=(
-	'cmake'
-	'git'
-	'openblas'
-	'openblas64'
-)
-conflicts=("${_name}")
-provides=("${_name}")
-source=("${_name}::git+${url}"
-	"kompute::git+https://github.com/nomic-ai/kompute.git"
-	"${_name}.conf"
-	"${_name}.service")
+pkgdesc='A high-performance, multiplayer code editor from the creators of Atom and Tree-sitter'
+arch=(x86_64)
+url=https://zed.dev
+_url="https://github.com/zed-industries/$_pkgname"
+license=(GPL-3.0-or-later AGPL-3.0-or-later Apache-2.0)
+depends=(alsa-lib libasound.so
+         curl libcurl.so
+         fontconfig
+         gcc-libs # libgcc_s.so libstdc++.so
+         glibc # libc.so libm.so
+         # libgit2 libgit2.so
+         # libxau libXau.so
+         libxcb # libxcb.so libxcb-xkb.so
+         # libxdmcp libXdmcp.so
+         libxkbcommon # libxkbcommon.so
+         libxkbcommon-x11 # libxkbcommon-x11.so
+         netcat
+         'nodejs>=18'
+         openssl libcrypto.so libssl.so
+         sqlite
+         vulkan-driver
+         vulkan-icd-loader
+         vulkan-tools
+         wayland
+         zlib libz.so
+         zstd libzstd.so)
+makedepends=(cargo
+             cargo-about
+             clang
+             cmake
+             git
+             protobuf
+             vulkan-headers
+             vulkan-validation-layers)
+optdepends=('clang: improved C/C++ language support'
+            'eslint: improved Javascript language support'
+            'pyright: improved Python language support'
+            'rust-analyzer: improved Rust language support')
+replaces=(zed-editor-git)
+provides=("$_pkgname=$pkgver")
+conflicts=("$_pkgname")
+source=("$pkgname::git+$_url.git")
+sha256sums=('SKIP')
 
-pkgver() {
-	cd "${srcdir}/${_name}"
-	printf "%s" "$(git describe --tags | sed 's/-/./g')"
-}
+_binname=zeditor
+_appid=dev.zed.Zed-Dev
 
 prepare() {
-	cd "${srcdir}/${_name}"
-	git submodule init
-	git config submodule.kompute.url "${srcdir}/kompute"
-	git -c protocol.file.allow=always submodule update
+	cd "$pkgname"
+	cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+	export DO_STARTUP_NOTIFY="true"
+	export APP_ICON="zed"
+	export APP_NAME="Zed"
+	export APP_CLI="$_binname"
+	export APP_ID="$_appid"
+	export APP_ARGS="%U"
+	envsubst < "crates/zed/resources/zed.desktop.in" > $_appid.desktop
+	./script/generate-licenses
+}
 
-	for _pkg in "${pkgname[@]}"; do
-		if [ ! -d "${srcdir}/${_pkg%-git}" ]; then
-			cp -r "${srcdir}/${_name}" "${srcdir}/${_pkg%-git}"
-		fi
-	done
+pkgver() {
+	cd "$pkgname"
+	local lasttag="$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-pre$' | head -1)"
+	echo -n "$(sed 's/^v//;s/-pre$//' <<< "$lasttag")"
+	echo -n ".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"
+	echo -n ".g$(git log --pretty=format:'%h' --abbrev=7 -n1 HEAD)"
+}
+
+_srcenv() {
+	cd "$pkgname"
+	export RUSTUP_TOOLCHAIN=stable
+	export CARGO_TARGET_DIR=target
+	CFLAGS+=' -march=goldmont-plus -mtune=goldmont-plus -ffat-lto-objects'
+	CXXFLAGS+=' -march=goldmont-plus -mtune=goldmont-plus -ffat-lto-objects'
+	RUSTFLAGS+=" --cfg gles --remap-path-prefix $PWD=/"
 }
 
 build() {
-	local _cmake_args=(
-		-B build
-		-S .
-		-DCMAKE_INSTALL_PREFIX=/usr
-		-DCMAKE_BUILD_TYPE=Release
-		-DGGML_MPI=OFF
-		-DGGML_BLAS=ON
-		-DGGML_BLAS_VENDOR=OpenBLAS
-		-DBLAS_LIBRARIES="/usr/lib/libopenblas.so"
-		-DLAPACK_LIBRARIES="/usr/lib/libopenblas.so"
-		-DCMAKE_C_FLAGS="${CFLAGS}"
-		-DCMAKE_CXX_FLAGS="${CXXFLAGS}"
-	)
-
-	cd "${srcdir}/${_name}"
-	cmake "${_cmake_args[@]}"
-	cmake --build build
+	_srcenv
+	export ZED_UPDATE_EXPLANATION='Updates are handled by pacman'
+	export RELEASE_VERSION="$pkgver"
+	export PROTOC=/usr/bin/protoc
+	export PROTOC_INCLUDE=/usr/include
+	cargo build --release --frozen --package zed --package cli
 }
 
-package_llama.cpp-git() {
-	pkgdesc="$pkgdesc (with OPENBlas CPU optimizations)"
-	depends+=('openblas'
-		'openblas64')
-	provides=("${_name}")
-
-	cd "${_name}"
-	DESTDIR="${pkgdir}" cmake --install build
-	_package
+# Tests assume access to vulkan video drivers, Wayland window creation,
+# detecting system keymaps, etc. Until there is something sensical for
+# a package to test in the suite, just skip it by default.
+check() {
+	_srcenv
+	# cargo test --frozen --all-features
 }
 
-_package() {
-	rm -rf "${pkgdir}/usr/bin/"*
-	cd build/bin/
-	for i in *; do
-		install -Dm755 "${i}" \
-			"${pkgdir}/usr/bin/${i}"
-	done
-
-	# systemd
-	install -D -m644 "${srcdir}/${_name}.conf" \
-		"${pkgdir}/etc/conf.d/${_name}"
-	install -D -m644 "${srcdir}/${_name}.service" \
-		-t "${pkgdir}/usr/lib/systemd/system"
-
-	# it conflicts with whisper.cpp
-	rm -f "${pkgdir}/usr/include/ggml.h"
+package() {
+	cd "$pkgname"
+	install -Dm0755 target/release/cli "$pkgdir/usr/bin/$_binname"
+	install -Dm0755 target/release/zed "$pkgdir/usr/lib/zed/zed-editor"
+	install -Dm0644 -t "$pkgdir/usr/share/applications/" "$_appid.desktop"
+	install -Dm0644 crates/zed/resources/app-icon.png "$pkgdir/usr/share/icons/$_pkgname.png"
 }
-
-sha256sums=('SKIP'
-	'SKIP'
-	'SKIP'
-	'SKIP')
