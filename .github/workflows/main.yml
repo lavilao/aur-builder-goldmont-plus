@@ -31,13 +31,14 @@ jobs:
           echo "pkgname=$pkgname" >> $GITHUB_ENV
           echo "pkgver=$pkgver" >> $GITHUB_ENV
 
-      - name: Build package
-        id: makepkg
-        uses: CachyOS/pkgbuild-action@master
-        with:
-          envvars: "CFLAGS=-march=goldmont-plus"
-          pkgdir: "."
-          makepkgArgs: "--skipchecksums --skippgpcheck --noconfirm -s"
+       - name: Build package
+         id: makepkg
+         uses: CachyOS/pkgbuild-action@master
+         env:
+           CFLAGS: -march=goldmont-plus
+         with:
+           pkgdir: "."
+           makepkgArgs: "--skipchecksums --skippgpcheck --noconfirm -s"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4

@@ -3,8 +3,16 @@
 
 pkgname=zed-git
 _pkgname=${pkgname%-git}
-pkgver=0.203.4.r190.gbd0a5dd
 pkgrel=1
+pkgver() {
+  local _url="https://github.com/zed-industries/zed"
+  local lasttag="$(git ls-remote --tags $_url | grep -E 'refs/tags/v[0-9]+\.[0-9]+\.[0-9]+-pre$' | sort -V | tail -1 | sed 's|.*refs/tags/||')"
+  if [[ -n "$lasttag" ]]; then
+    echo "$(sed 's/^v//;s/-pre$//' <<< "$lasttag")"
+  else
+    echo "0.203.4"
+  fi
+}
 pkgdesc='A high-performance, multiplayer code editor from the creators of Atom and Tree-sitter'
 arch=(x86_64)
 url=https://zed.dev
@@ -73,7 +81,7 @@ _srcenv() {
 	export CARGO_TARGET_DIR=target
 	CFLAGS+=' -ffat-lto-objects'
 	CXXFLAGS+=' -ffat-lto-objects'
-	RUSTFLAGS+=" --remap-path-prefix $PWD=/"
+	RUSTFLAGS+=" --cfg gles --remap-path-prefix $PWD=/"
 }
 
 build() {
