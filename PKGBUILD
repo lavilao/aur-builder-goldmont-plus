@@ -4,7 +4,6 @@
 pkgname=zed-git
 _pkgname=${pkgname%-git}
 pkgver=0.203.4.r190.gbd0a5dd
-options=('!debug')
 pkgrel=1
 pkgdesc='A high-performance, multiplayer code editor from the creators of Atom and Tree-sitter'
 arch=(x86_64)
@@ -67,13 +66,6 @@ prepare() {
 	./script/generate-licenses
 }
 
-pkgver() {
-	cd "$pkgname"
-	local lasttag="$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-pre$' | head -1)"
-	echo -n "$(sed 's/^v//;s/-pre$//' <<< "$lasttag")"
-	echo -n ".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"
-	echo -n ".g$(git log --pretty=format:'%h' --abbrev=7 -n1 HEAD)"
-}
 
 _srcenv() {
 	cd "$pkgname"
@@ -81,7 +73,7 @@ _srcenv() {
 	export CARGO_TARGET_DIR=target
 	CFLAGS+=' -ffat-lto-objects'
 	CXXFLAGS+=' -ffat-lto-objects'
-	RUSTFLAGS+=" --cfg gles --remap-path-prefix $PWD=/"
+	RUSTFLAGS+=" --remap-path-prefix $PWD=/"
 }
 
 build() {
