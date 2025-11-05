@@ -12,12 +12,19 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+       - name: Checkout repository
+         uses: actions/checkout@v4
+         with:
+           fetch-depth: 0
 
-      - name: Extract package name and version from PKGBUILD
+       - name: Update PKGBUILD from AUR and apply patches
+         run: |
+           curl -o PKGBUILD https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=zed-git
+           sed -i '/^pkgver=/d' PKGBUILD
+           sed -i '/^pkgrel=1$/a pkgver() {\ncd "$pkgname"\nlocal lasttag="$(git tag --sort=-v:refname | grep -E '\''^v[0-9]+\.[0-9]+\.[0-9]+-pre$'\'' | head -1)"\necho -n "$(sed '\''s/^v//;s/-pre$//'\'' <<< "$lasttag")"\necho -n ".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"\necho -n ".g$(git log --pretty=format:'\''%h'\'' --abbrev=7 -n1 HEAD)"\n}' PKGBUILD
+           sed -i 's/RUSTFLAGS+="\(.*\)"/RUSTFLAGS+="\1 --cfg gles"/' PKGBUILD
+
+       - name: Extract package name and version from PKGBUILD
         id: extract_pkginfo
         run: |
           pkgname=$(source ./PKGBUILD && echo $pkgname)
@@ -33,11 +40,11 @@ jobs:
           pkgdir: "."
           makepkgArgs: "--skipchecksums --skippgpcheck --noconfirm -s"
 
-      - name: Upload package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.pkgname }}
-          path: "*.pkg.tar.*"
+       - name: Upload package artifact
+         uses: actions/upload-artifact@v4
+         with:
+           name: ${{ env.pkgname }}
+           path: ${{ steps.makepkg.outputs.pkgfile0 }}
 
       - name: Create Release
         id: create_release
@@ -51,13 +58,13 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Upload Release Asset
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: "*.pkg.tar.*"
-          asset_name: ${{ env.pkgname }}-v${{ env.pkgver }}.pkg.tar.*
+       - name: Upload Release Asset
+         id: upload-release-asset
+         uses: actions/upload-release-asset@v1
+         env:
+           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+         with:
+           upload_url: ${{ steps.create_release.outputs.upload_url }}
+           asset_path: ${{ steps.makepkg.outputs.pkgfile0 }}
+           asset_name: ${{ steps.makepkg.outputs.pkgfile0 }}
           asset_content_type: application/octet-stream
