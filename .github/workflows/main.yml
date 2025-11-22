@@ -17,92 +17,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch and Patch PKGBUILD
+      - name: Patch Local PKGBUILD
         run: |
-          # 1. Download from the direct blob URL
-          # We use -L to follow redirects and quotes to handle the '?h=' parameter safely
-          curl -L -o PKGBUILD "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=zed-git"
-          
-          # 2. VALIDATION: Check if we got an HTML error page (like 502 Bad Gateway)
-          # If the first line contains <html or <!DOCTYPE, we know it's garbage.
-          if head -n 1 PKGBUILD | grep -qE "^<(!DOCTYPE|html)"; then
-            echo "::error::AUR returned an HTML error page instead of the PKGBUILD code. The AUR might be down."
+          # 1. Verify file exists
+          if [ ! -f "PKGBUILD" ]; then
+            echo "::error::PKGBUILD file not found in repository root!"
             exit 1
           fi
 
-          # 3. FIX: pkgver empty error
-          # We replace the existing pkgver with a placeholder rather than deleting it.
+          # 2. FIX: pkgver empty error
+          # We replace the existing pkgver with a placeholder (0.0.0) so 'makepkg' can parse the file initially.
           sed -i 's/^pkgver=.*/pkgver=0.0.0/' PKGBUILD
 
-          # 4. Inject pkgver() function
-          # FIX: We cd into "zed" (upstream repo name), not "zed-git" (pkgname)
-          # FIX: We use 'grep -m1' to avoid "Broken Pipe" errors in the pipe chain
-          sed -i '/^pkgrel=1$/a pkgver() {\ncd "zed"\nlocal lasttag="$(git tag --sort=-v:refname | grep -E -m1 '\''^v[0-9]+\.[0-9]+\.[0-9]+-pre$'\'' )"\necho -n "$(sed '\''s/^v//;s/-pre$//'\'' <<< "$lasttag")"\necho -n ".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"\necho -n ".g$(git log --pretty=format:'\''%h'\'' --abbrev=7 -n1 HEAD)"\n}' PKGBUILD
-
-          # 5. Update Rust Flags
-          sed -i 's/RUSTFLAGS+="\(.*\)"/RUSTFLAGS+="\1 --cfg gles"/' PKGBUILD
-
-      - name: Calculate Version (Pre-Build)
-        id: calc_ver
-        run: |
-          echo "::group::Cloning Zed for version calculation"
-          git clone https://github.com/zed-industries/zed.git temp_zed_source
-          cd temp_zed_source
-
-          # Use grep -m1 to ensure we stop after the first match
-          lasttag="$(git tag --sort=-v:refname | grep -E -m1 '^v[0-9]+\.[0-9]+\.[0-9]+-pre$' )"
-          
-          base_ver="$(sed 's/^v//;s/-pre$//' <<< "$lasttag")"
-          rev_count=".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"
-          short_hash=".g$(git log --pretty=format:'%h' --abbrev=7 -n1 HEAD)"
-          
-          REAL_PKGVER="${base_ver}${rev_count}${short_hash}"
-          
-          cd ..
-          rm -rf temp_zed_source
-          echo "::endgroup::"
-
-          echo "Calculated version: $REAL_PKGVER"
-          echo "pkgver=$REAL_PKGVER" >> $GITHUB_ENV
-          
-          # Now that PKGBUILD is validated, we can source it safely
-          source ./PKGBUILD
-          echo "pkgname=$pkgname" >> $GITHUB_ENV
-
-      - name: Build package
-        id: makepkg
-        uses: CachyOS/pkgbuild-action@master
-        env:
-          CFLAGS: -march=goldmont-plus
-        with:
-          pkgdir: "."
-          makepkgArgs: "--skipchecksums --skippgpcheck --noconfirm -s"
-
-      - name: Upload package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.pkgname }}-${{ env.pkgver }}
-          path: ${{ steps.makepkg.outputs.pkgfile0 }}
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: "${{ env.pkgname }}-v${{ env.pkgver }}-${{ github.run_number }}"
-          release_name: "Release ${{ env.pkgname }}-v${{ env.pkgver }}"
-          body: "Automated build for ${{ env.pkgname }} version ${{ env.pkgver }} (commit ${{ github.sha }})"
-          draft: false
-          prerelease: false
-
-      - name: Upload Release Asset
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ steps.makepkg.outputs.pkgfile0 }}
-          asset_name: ${{ steps.makepkg.outputs.pkgfile0 }}
-          asset_content_type: application/octet-stream
+          # 3. Inject pkgver() function
+          # We inject the dynamic version logic after 'pkgrel=1'
+          # FIX: We cd into "zed" (upstream repo name), not "zed-git"
+          # FIX: We use 'grep -m1' to prevent "Broken Pipe" errors
+          sed -i '/^pkgrel=1$/a pkgver() {\ncd "zed"\nlocal lasttag="$(git tag --sort=-v:refname | grep -E -m1 '\''^v[0-9]+\.[0-9]+\.[0-9]+-pre$'\'' )"\necho -n "$(sed '\''s/^v//;s/-pre$//'\'' <<< "$lasttag")"\necho -n ".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"\necho -n ".g$(git log --pretty=format:'\''%h'\'' --abbrev
