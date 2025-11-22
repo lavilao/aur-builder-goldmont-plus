@@ -17,25 +17,50 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Update PKGBUILD from AUR and apply patches
+      - name: Prepare PKGBUILD
         run: |
-          curl -o PKGBUILD https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=zed-git
-          sed -i '/^pkgver=/d' PKGBUILD
-          sed -i '/^pkgrel=1$/a pkgver() {\ncd "$pkgname"\nlocal lasttag="$(git tag --sort=-v:refname | grep -E '\''^v[0-9]+\.[0-9]+\.[0-9]+-pre$'\'' | head -1)"\necho -n "$(sed '\''s/^v//;s/-pre$//'\'' <<< "$lasttag")"\necho -n ".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"\necho -n ".g$(git log --pretty=format:'\''%h'\'' --abbrev=7 -n1 HEAD)"\n}' PKGBUILD
+          # 1. Download the PKGBUILD
+          curl -o PKGBUILD "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=zed-git"
+          
+          # 2. FIX: Do NOT delete pkgver. Replace it with a placeholder so 'provides' check passes.
+          sed -i 's/^pkgver=.*/pkgver=0.0.0/' PKGBUILD
+          
+          # 3. Inject the pkgver() function
+          # Note: We change 'cd "$pkgname"' to 'cd zed' because upstream zed-git PKGBUILD 
+          # downloads into a folder named 'zed', not 'zed-git'.
+          sed -i '/^pkgrel=1$/a pkgver() {\ncd "zed"\nlocal lasttag="$(git tag --sort=-v:refname | grep -E '\''^v[0-9]+\.[0-9]+\.[0-9]+-pre$'\'' | head -1)"\necho -n "$(sed '\''s/^v//;s/-pre$//'\'' <<< "$lasttag")"\necho -n ".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"\necho -n ".g$(git log --pretty=format:'\''%h'\'' --abbrev=7 -n1 HEAD)"\n}' PKGBUILD
+          
+          # 4. Update Rust flags
           sed -i 's/RUSTFLAGS+="\(.*\)"/RUSTFLAGS+="\1 --cfg gles"/' PKGBUILD
 
-      - name: Extract package name and version from PKGBUILD
-        id: extract_pkginfo
+      - name: Calculate Version (Pre-Build)
+        id: calc_ver
         run: |
-          # Source the PKGBUILD to get pkgname and the pkgver function
+          # We need to clone the upstream repo to calculate the version 
+          # because makepkg hasn't run yet to download sources.
+          echo "::group::Cloning Zed for version calculation"
+          git clone https://github.com/zed-industries/zed.git temp_zed_source
+          cd temp_zed_source
+          
+          # logic taken from the PKGBUILD pkgver() function
+          lasttag="$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-pre$' | head -1)"
+          base_ver="$(sed 's/^v//;s/-pre$//' <<< "$lasttag")"
+          rev_count=".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"
+          short_hash=".g$(git log --pretty=format:'%h' --abbrev=7 -n1 HEAD)"
+          
+          REAL_PKGVER="${base_ver}${rev_count}${short_hash}"
+          
+          cd ..
+          rm -rf temp_zed_source
+          echo "::endgroup::"
+          
+          echo "Calculated version: $REAL_PKGVER"
+          echo "pkgver=$REAL_PKGVER" >> $GITHUB_ENV
+          
+          # Extract pkgname from PKGBUILD
           source ./PKGBUILD
-          
-          # Call the pkgver() function to generate the version
-          pkgver=$(pkgver)
-          
           echo "pkgname=$pkgname" >> $GITHUB_ENV
-          echo "pkgver=$pkgver" >> $GITHUB_ENV
-          echo "::notice::Building $pkgver"
+
       - name: Build package
         id: makepkg
         uses: CachyOS/pkgbuild-action@master
@@ -43,12 +68,14 @@ jobs:
           CFLAGS: -march=goldmont-plus
         with:
           pkgdir: "."
+          # makepkg will run the pkgver() function we injected, 
+          # updating the package metadata to match what we calculated above.
           makepkgArgs: "--skipchecksums --skippgpcheck --noconfirm -s"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.pkgname }}
+          name: ${{ env.pkgname }}-${{ env.pkgver }}
           path: ${{ steps.makepkg.outputs.pkgfile0 }}
 
       - name: Create Release
