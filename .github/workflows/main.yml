@@ -17,41 +17,42 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Prepare PKGBUILD from AUR Snapshot
+      - name: Fetch and Patch PKGBUILD
         run: |
-          # 1. Download the Snapshot Tarball (Reliable method)
-          curl -L -o zed-git.tar.gz "https://aur.archlinux.org/cgit/aur.git/snapshot/zed-git.tar.gz"
+          # 1. Download with -f (fail on error) and -L (follow redirects). 
+          # IMPORTANT: Quotes around URL are required so bash doesn't interpret '?'.
+          curl -f -L -o PKGBUILD "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=zed-git"
           
-          # 2. Extract and move files to current directory
-          tar -xvf zed-git.tar.gz
-          mv zed-git/* .
-          rm -rf zed-git zed-git.tar.gz
-          
-          # 3. FIX: Set placeholder pkgver. Do NOT delete it.
-          # This satisfies the 'provides' requirement during parsing.
+          # 2. Validation: Check if the file starts with HTML tags (which means download failed)
+          if grep -q "<!DOCTYPE html" PKGBUILD || grep -q "<html" PKGBUILD; then
+            echo "::error::Downloaded file is an HTML page, not a PKGBUILD. Check the URL or AUR status."
+            cat PKGBUILD
+            exit 1
+          fi
+
+          # 3. FIX: Do not delete pkgver. Set a dummy version so 'source ./PKGBUILD' works.
           sed -i 's/^pkgver=.*/pkgver=0.0.0/' PKGBUILD
-          
-          # 4. Inject the pkgver() function
-          # FIX: Used 'grep -m1' to stop reading after 1 match, preventing 'Broken pipe' errors
+
+          # 4. Inject pkgver() function. 
+          # FIX: Changed 'cd $pkgname' to 'cd zed' because the git repo folder is named 'zed'.
+          # FIX: Used 'grep -m1' instead of '| head -1' to prevent 'Broken pipe' errors.
           sed -i '/^pkgrel=1$/a pkgver() {\ncd "zed"\nlocal lasttag="$(git tag --sort=-v:refname | grep -E -m1 '\''^v[0-9]+\.[0-9]+\.[0-9]+-pre$'\'' )"\necho -n "$(sed '\''s/^v//;s/-pre$//'\'' <<< "$lasttag")"\necho -n ".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"\necho -n ".g$(git log --pretty=format:'\''%h'\'' --abbrev=7 -n1 HEAD)"\n}' PKGBUILD
-          
-          # 5. Update Rust flags
+
+          # 5. Update Rust Flags
           sed -i 's/RUSTFLAGS+="\(.*\)"/RUSTFLAGS+="\1 --cfg gles"/' PKGBUILD
 
       - name: Calculate Version (Pre-Build)
         id: calc_ver
         run: |
           echo "::group::Cloning Zed for version calculation"
+          # We manually clone to calculate version string before makepkg runs
           git clone https://github.com/zed-industries/zed.git temp_zed_source
           cd temp_zed_source
-          
-          # Logic updated to use 'grep -m1' to avoid broken pipe
+
+          # FIX: Use grep -m1 to stop immediately after finding the tag
           lasttag="$(git tag --sort=-v:refname | grep -E -m1 '^v[0-9]+\.[0-9]+\.[0-9]+-pre$' )"
           
-          # Strip 'v' and '-pre'
           base_ver="$(sed 's/^v//;s/-pre$//' <<< "$lasttag")"
-          
-          # Calculate revisions and hash
           rev_count=".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"
           short_hash=".g$(git log --pretty=format:'%h' --abbrev=7 -n1 HEAD)"
           
@@ -60,11 +61,11 @@ jobs:
           cd ..
           rm -rf temp_zed_source
           echo "::endgroup::"
-          
+
           echo "Calculated version: $REAL_PKGVER"
           echo "pkgver=$REAL_PKGVER" >> $GITHUB_ENV
           
-          # Source the PKGBUILD now that we know it is a valid file
+          # Extract pkgname safely now that PKGBUILD is valid
           source ./PKGBUILD
           echo "pkgname=$pkgname" >> $GITHUB_ENV
 
