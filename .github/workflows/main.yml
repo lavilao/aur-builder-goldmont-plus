@@ -27,11 +27,15 @@ jobs:
       - name: Extract package name and version from PKGBUILD
         id: extract_pkginfo
         run: |
-          pkgname=$(source ./PKGBUILD && echo $pkgname)
-          pkgver=$(source ./PKGBUILD && echo $pkgver)
+          # Source the PKGBUILD to get pkgname and the pkgver function
+          source ./PKGBUILD
+          
+          # Call the pkgver() function to generate the version
+          pkgver=$(pkgver)
+          
           echo "pkgname=$pkgname" >> $GITHUB_ENV
           echo "pkgver=$pkgver" >> $GITHUB_ENV
-
+          echo "::notice::Building $pkgver"
       - name: Build package
         id: makepkg
         uses: CachyOS/pkgbuild-action@master
