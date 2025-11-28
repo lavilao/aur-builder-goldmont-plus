@@ -30,7 +30,32 @@ jobs:
           sed -i 's/^pkgver=.*/pkgver=0.0.0/' PKGBUILD
 
           # 3. Inject pkgver() function
-          # We inject the dynamic version logic after 'pkgrel=1'
-          # FIX: We cd into "zed" (upstream repo name), not "zed-git"
-          # FIX: We use 'grep -m1' to prevent "Broken Pipe" errors
-          sed -i '/^pkgrel=1$/a pkgver() {\ncd "zed"\nlocal lasttag="$(git tag --sort=-v:refname | grep -E -m1 '\''^v[0-9]+\.[0-9]+\.[0-9]+-pre$'\'' )"\necho -n "$(sed '\''s/^v//;s/-pre$//'\'' <<< "$lasttag")"\necho -n ".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"\necho -n ".g$(git log --pretty=format:'\''%h'\'' --abbrev
+          # Create pkgver function in a separate file to avoid YAML parsing issues
+          cat > /tmp/pkgver_function.sh << 'EOF'
+          pkgver() {
+            cd "zed"
+            local lasttag="$(git tag --sort=-v:refname | grep -E -m1 '^v[0-9]+\.[0-9]+\.[0-9]+-pre$' )"
+            echo -n "$(sed 's/^v//;s/-pre$//' <<< "$lasttag")"
+            echo -n ".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"
+            echo -n ".g$(git log --pretty=format:'%h' --abbrev-commit)"
+          }
+          EOF
+          
+          # Insert the function after pkgrel=1
+          sed -i '/^pkgrel=1$/r /tmp/pkgver_function.sh' PKGBUILD
+
+      - name: Build package
+        run: |
+          # Install build dependencies if needed
+          sudo pacman -S --needed base-devel
+
+          # Build the package
+          makepkg -s
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: "*.pkg.tar.*"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
