@@ -31,13 +31,19 @@ jobs:
               
               # Update system and install build tools
               pacman -Syu --noconfirm
-              pacman -S --noconfirm base-devel git binutils fakeroot
-            
+              pacman -S --noconfirm base-devel git binutils fakeroot rust
+              
+              # Install Rust toolchain
+              echo \"=== INSTALANDO RUST TOOLCHAIN ===\"
+              rustup default stable
+              rustup component add rust-src
+              
               # Create a non-root user for building
               useradd -m -s /bin/bash auruser 2>/dev/null || true
               
               # Copy files and change ownership
               cp /build/PKGBUILD /tmp/
+              cp -r /build/zed /tmp/ 2>/dev/null || echo \"Warning: zed directory not found in build\"
               chown -R auruser:auruser /tmp
               
               # Switch to auruser for building
@@ -46,34 +52,69 @@ jobs:
                 
                 cd /tmp
                 
-                # 1. Verify PKGBUILD exists
+                echo \"=== DIAGNÓSTICO 1: Verificando PKGBUILD existe ===\"
                 if [ ! -f PKGBUILD ]; then
                   echo '::error::PKGBUILD file not found!'
                   exit 1
                 fi
-
-                # 2. Replace pkgver with placeholder
-                sed -i 's/^pkgver=.*/pkgver=0.0.0/' PKGBUILD
-
-                # 3. Add pkgver() function
-                cat > pkgver_function.sh << 'FUNC_EOF'
-                pkgver() {
-                  cd 'zed'
-                  local lasttag=\"\$(git tag --sort=-v:refname | grep -E -m1 '^v[0-9]+\.[0-9]+\.[0-9]+-pre$' )\"
-                  echo -n \"\$(sed 's/^v//;s/-pre$//' <<< \"\$lasttag\")\"
-                  echo -n \".r\$(git rev-list \"\$(git merge-base HEAD \"\$lasttag\")..HEAD\" --count)\"
-                  echo -n \".g\$(git log --pretty=format:'%h' --abbrev-commit)\"
+                echo \"PKGBUILD found. Contents preview:\"
+                head -10 PKGBUILD
+                
+                echo \"=== DIAGNÓSTICO 2: Verificando dependencias de build ===\"
+                echo \"Checking for rust and cargo:\"
+                which rustc cargo || echo \"ERROR: Rust toolchain not found!\"
+                rustc --version 2>/dev/null || echo \"ERROR: rustc version check failed\"
+                cargo --version 2>/dev/null || echo \"ERROR: cargo version check failed\"
+                
+                echo \"=== DIAGNÓSTICO 3: Analizando función pkgver() ===\"
+                echo \"Existing pkgver function:\"
+                grep -n \"pkgver()\" PKGBUILD || echo \"No pkgver function found\"
+                echo \"Lines around pkgrel:\"
+                grep -n -A2 -B2 \"pkgrel=\" PKGBUILD
+                
+                echo \"=== DIAGNÓSTICO 4: Verificando directorio zed ===\"
+                if [ -d \"zed\" ]; then
+                  cd zed
+                  echo \"Repository status:\"
+                  pwd
+                  git status
+                  echo \"Available tags:\"
+                  git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-pre$' | head -5
+                  cd ..
+                else
+                  echo \"ERROR: zed directory not found!\"
+                  ls -la
+                  echo \"Attempting to clone zed repository\"
+                  git clone https://github.com/zed-industries/zeditor.git zed
+                fi
+                
+                echo \"=== DIAGNÓSTICO 5: Intentando función pkgver() manualmente ===\"
+                cd zed 2>/dev/null || { echo \"Cannot cd to zed, trying alternate approach\"; pkgver 2>/dev/null || echo \"Manual pkgver() failed\"; }
+                
+                echo \"=== DIAGNÓSTICO 6: Verificando sintaxis de PKGBUILD ===\"
+                bash -n PKGBUILD 2>/dev/null || echo \"PKGBUILD syntax error detected!\"
+                
+                # Build package with detailed output
+                echo \"=== INICIANDO BUILD ===\"
+                makepkg -s --noconfirm --skipinteg || {
+                  echo \"=== BUILD FAILED - Checking makepkg output ===\"
+                  tail -20 /tmp/makepkg.log 2>/dev/null || echo \"No makepkg.log found\"
+                  exit 1
                 }
-                FUNC_EOF
                 
-                # Insert function after pkgrel=1
-                sed -i '/^pkgrel=1$/r pkgver_function.sh' PKGBUILD
-                
-                # Build package
-                makepkg -s --noconfirm --skipinteg
+                echo \"=== BUILD COMPLETED - Verificando resultados ===\"
+                ls -la *.pkg.tar.* 2>/dev/null || {
+                  echo \"No packages found in /tmp\"
+                  ls -la /tmp/
+                  exit 1
+                }
                 
                 # Copy built packages
-                cp *.pkg.tar.* /build/ 2>/dev/null || echo 'No packages built'
+                cp *.pkg.tar.* /build/ 2>/dev/null || {
+                  echo \"Failed to copy packages to /build\"
+                  ls -la /build/
+                  exit 1
+                }
               EOF
             "
 
