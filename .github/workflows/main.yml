@@ -33,10 +33,9 @@ jobs:
               pacman -Syu --noconfirm
               pacman -S --noconfirm base-devel git binutils fakeroot rust
               
-              # Install Rust toolchain
-              echo \"=== INSTALANDO RUST TOOLCHAIN ===\"
-              rustup default stable
-              rustup component add rust-src
+              # Verify Rust installation (rustup not available in Arch Linux via pacman)
+              echo \"=== VERIFICANDO RUST INSTALLED ===\"
+              source /etc/profile.d/rust.sh 2>/dev/null || echo \"Rust already available via PATH\"
               
               # Create a non-root user for building
               useradd -m -s /bin/bash auruser 2>/dev/null || true
