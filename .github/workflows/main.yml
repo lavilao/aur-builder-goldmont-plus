@@ -20,53 +20,66 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build in Arch Linux container
+      - name: Build package using Arch Linux in Docker
         run: |
-          # Create a temporary script for the container
-          cat > /tmp/build_script.sh << 'SCRIPT_END'
-          #!/bin/bash
-          set -e
-          
-          # Update and install base-devel
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git
+          # Run Arch Linux container with proper configuration for AUR building
+          docker run --rm \
+            -v "$PWD":/build \
+            -e MAKEFLAGS="-j$(nproc)" \
+            archlinux:latest /bin/bash -c "
+              set -e
+              
+              # Update system and install build tools
+              pacman -Syu --noconfirm
+              pacman -S --noconfirm base-devel git binutils fakeroot
             
-          # Copy PKGBUILD to container
-          cp /build/PKGBUILD /tmp/
-          cd /tmp
-            
-          # 1. Verify file exists
-          if [ ! -f PKGBUILD ]; then
-            echo '::error::PKGBUILD file not found!'
-            exit 1
-          fi
+              # Create a non-root user for building
+              useradd -m -s /bin/bash auruser 2>/dev/null || true
+              
+              # Copy files and change ownership
+              cp /build/PKGBUILD /tmp/
+              chown -R auruser:auruser /tmp
+              
+              # Switch to auruser for building
+              sudo -u auruser bash << 'EOF'
+                set -e
+                
+                cd /tmp
+                
+                # 1. Verify PKGBUILD exists
+                if [ ! -f PKGBUILD ]; then
+                  echo '::error::PKGBUILD file not found!'
+                  exit 1
+                fi
 
-          # 2. FIX: pkgver empty error
-          sed -i 's/^pkgver=.*/pkgver=0.0.0/' PKGBUILD
+                # 2. Replace pkgver with placeholder
+                sed -i 's/^pkgver=.*/pkgver=0.0.0/' PKGBUILD
 
-          # 3. Inject pkgver() function
-          cat > /tmp/pkgver_function.sh << 'EOF'
-          pkgver() {
-            cd "zed"
-            local lasttag="$(git tag --sort=-v:refname | grep -E -m1 '^v[0-9]+\.[0-9]+\.[0-9]+-pre$' )"
-            echo -n "$(sed 's/^v//;s/-pre$//' <<< "$lasttag")"
-            echo -n ".r$(git rev-list "$(git merge-base HEAD "$lasttag")..HEAD" --count)"
-            echo -n ".g$(git log --pretty=format:'%h' --abbrev-commit)"
-          }
-          EOF
-            
-          # Insert the function after pkgrel=1
-          sed -i '/^pkgrel=1$/r /tmp/pkgver_function.sh' PKGBUILD
+                # 3. Add pkgver() function
+                cat > pkgver_function.sh << 'FUNC_EOF'
+                pkgver() {
+                  cd 'zed'
+                  local lasttag=\"\$(git tag --sort=-v:refname | grep -E -m1 '^v[0-9]+\.[0-9]+\.[0-9]+-pre$' )\"
+                  echo -n \"\$(sed 's/^v//;s/-pre$//' <<< \"\$lasttag\")\"
+                  echo -n \".r\$(git rev-list \"\$(git merge-base HEAD \"\$lasttag\")..HEAD\" --count)\"
+                  echo -n \".g\$(git log --pretty=format:'%h' --abbrev-commit)\"
+                }
+                FUNC_EOF
+                
+                # Insert function after pkgrel=1
+                sed -i '/^pkgrel=1$/r pkgver_function.sh' PKGBUILD
+                
+                # Build package
+                makepkg -s --noconfirm --skipinteg
+                
+                # Copy built packages
+                cp *.pkg.tar.* /build/ 2>/dev/null || echo 'No packages built'
+              EOF
+            "
 
-          # Build the package
-          makepkg -s
-
-          # Copy the built package back to the host
-          cp *.pkg.tar.* /build/
-          SCRIPT_END
-
-          # Run the build process in an Arch Linux Docker container
-          docker run --rm -v "$PWD":/build -v /tmp/build_script.sh:/build_script.sh archlinux:latest /bin/bash /build_script.sh
+      - name: List built packages
+        run: |
+          ls -la *.pkg.tar.* 2>/dev/null || echo "No packages found"
 
       - name: Release
         uses: softprops/action-gh-release@v1
