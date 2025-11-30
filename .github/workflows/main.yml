@@ -28,7 +28,7 @@ jobs:
             # Add optimization flags
             sed -i 's/CFLAGS+=/CFLAGS+= -march=goldmont-plus -mtune=goldmont-plus /g' PKGBUILD
             sed -i 's/CXXFLAGS+=/CXXFLAGS+= -march=goldmont-plus -mtune=goldmont-plus /g' PKGBUILD
-            sed -i 's/RUSTFLAGS+=\(--remap-path-prefix $PWD=\/\)/RUSTFLAGS+=--cfg gles \1/g' PKGBUILD
+            sed -i 's/RUSTFLAGS+=\(--remap-path-prefix \$PWD=\/\)/RUSTFLAGS+=--cfg gles \1/g' PKGBUILD
 
             # Build and install
             makepkg -si --noconfirm
