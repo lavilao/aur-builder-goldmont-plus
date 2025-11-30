@@ -17,6 +17,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Checkout zed repository
+        uses: actions/checkout@v4
+        with:
+          repository: zed-industries/zed
+          path: zed
+          fetch-depth: 1
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -42,7 +49,7 @@ jobs:
               
               # Copy files and change ownership
               cp /build/PKGBUILD /tmp/
-              cp -r /build/zed /tmp/ 2>/dev/null || echo \"Warning: zed directory not found in build\"
+              cp -r /build/zed /tmp/ || echo \"Warning: zed directory not found in build\"
               chown -R auruser:auruser /tmp
               
               # Switch to auruser for building
@@ -84,7 +91,7 @@ jobs:
                   echo \"ERROR: zed directory not found!\"
                   ls -la
                   echo \"Attempting to clone zed repository\"
-                  git clone https://github.com/zed-industries/zeditor.git zed
+                  git clone https://github.com/zed-industries/zed.git zed
                 fi
                 
                 echo \"=== DIAGNÓSTICO 5: Intentando función pkgver() manualmente ===\"
