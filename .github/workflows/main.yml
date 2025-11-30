@@ -22,7 +22,7 @@ jobs:
         with:
           repository: zed-industries/zed
           path: zed
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -95,7 +95,11 @@ jobs:
                 fi
                 
                 echo \"=== DIAGNÓSTICO 5: Intentando función pkgver() manualmente ===\"
-                cd zed 2>/dev/null || { echo \"Cannot cd to zed, trying alternate approach\"; pkgver 2>/dev/null || echo \"Manual pkgver() failed\"; }
+                cd zed 2>/dev/null && { 
+                  echo \"Testing pkgver() in zed directory\"
+                  pkgver 2>/dev/null || echo \"Manual pkgver() failed\"
+                  cd ..
+                }
                 
                 echo \"=== DIAGNÓSTICO 6: Verificando sintaxis de PKGBUILD ===\"
                 bash -n PKGBUILD 2>/dev/null || echo \"PKGBUILD syntax error detected!\"
