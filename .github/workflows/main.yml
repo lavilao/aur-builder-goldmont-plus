@@ -1,9 +1,9 @@
-name: Build and Release zed-git (Debian)
+name: Build and Release zed-git (AppImage)
 
 on:
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches: ["appimage"]
     tags: ["v*"]
 
 jobs:
@@ -12,7 +12,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Build zed-git for Debian
+      - name: Build zed-git AppImage
         run: |
           docker run --rm ubuntu:22.04 /bin/bash -c "
             set -e
@@ -53,7 +53,9 @@ jobs:
               libxcb1-dev \
               libxkbcommon-dev \
               ca-certificates \
-              gnupg
+              gnupg \
+              squashfs-tools \
+              zsync
 
             # Install rustup and rust
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -71,49 +73,88 @@ jobs:
             # Build zed with release profile
             cargo build --release --package zed --package cli
 
-            # Create a simple packaging structure
-            mkdir -p /tmp/zed-debian-build/usr/bin
-            mkdir -p /tmp/zed-debian-build/usr/lib/zed
-            cp target/release/cli /tmp/zed-debian-build/usr/bin/zed
-            cp target/release/zed /tmp/zed-debian-build/usr/lib/zed/zed-editor
+            # Create AppDir structure
+            mkdir -p /tmp/zed-appdir/usr/bin
+            mkdir -p /tmp/zed-appdir/usr/lib/zed
+            mkdir -p /tmp/zed-appdir/usr/share/applications
+            mkdir -p /tmp/zed-appdir/usr/share/icons/hicolor/256x256/apps
 
-            # Create a simple .deb package
-            cd /tmp
-            mkdir -p zed-debian-package/DEBIAN
-            mkdir -p zed-debian-package/usr/bin
-            mkdir -p zed-debian-package/usr/lib/zed
+            # Copy binaries to AppDir
+            cp target/release/cli /tmp/zed-appdir/usr/bin/zed
+            cp target/release/zed /tmp/zed-appdir/usr/lib/zed/zed-editor
 
-            # Create control file
-            cat > zed-debian-package/DEBIAN/control << 'EOF'
-            Package: zed-git
-            Version: 1.0.0-custom
-            Section: devel
-            Priority: optional
-            Architecture: amd64
-            Depends: libasound2, libfontconfig1, libwayland-client0, libx11-xcb1, libxkbcommon0, libssl3, libzstd1, libvulkan1, libsqlite3-0, libxcb1, libxkbcommon-x11-0
-            Maintainer: Custom Build
-            Description: Zed Editor (Git version with GLES support)
-             A high-performance, multiplayer code editor from the creators of Atom and Tree-sitter
+            # Create .desktop file for AppImage
+            cat > /tmp/zed-appdir/usr/share/applications/dev.zed.Zed-Dev.desktop << 'EOF'
+            [Desktop Entry]
+            Name=Zed
+            Comment=A high-performance, multiplayer code editor
+            Exec=zed
+            Icon=zed
+            Type=Application
+            Categories=Development;IDE;TextEditor;
+            StartupNotify=true
+            StartupWMClass=Zed
+            MimeType=text/plain;text/html;text/css;text/javascript;text/xml;text/x-python;text/x-java-source;text/x-c++src;text/x-csrc;text/x-chdr;text/x-java;
             EOF
 
-            # Copy binaries
-            cp -r zed-debian-build/usr/* zed-debian-package/usr/
+            # Copy icon
+            cp crates/zed/resources/app-icon.png /tmp/zed-appdir/usr/share/icons/hicolor/256x256/apps/zed.png
 
-            # Build the .deb package
-            dpkg-deb --build --root-owner-group zed-debian-package
-            mv zed-debian-package.deb zed-git-debian-amd64.deb
+            # Create AppRun script
+            cat > /tmp/zed-appdir/AppRun << 'EOF'
+            #!/bin/sh
+            HERE=\"$(dirname \"$(readlink -f \"\$0\")\")
+            export PATH=\"\$HERE/usr/bin:\$PATH\"
+            export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"
+            exec \"\$HERE/usr/bin/zed\" \"\$@\"
+            EOF
+            chmod +x /tmp/zed-appdir/AppRun
+
+            # Download appimagetool
+            curl -L -o /tmp/appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+            chmod +x /tmp/appimagetool
+
+            # Generate version string for filename
+            ZED_VERSION=\$(git -C zed describe --tags --always --abbrev=7 2>/dev/null || echo \"git-\$(git -C zed rev-parse --short HEAD)\")
+            OUTPUT_FILENAME=\"Zed-\${ZED_VERSION}-x86_64.AppImage\"
+
+            # Create AppImage with update support
+            cd /tmp
+            /tmp/appimagetool \
+              --updateinformation \"gh-releases-zsync|lavilao|aur-builder-goldmont-plus|appimage|Zed-x86_64.AppImage.zsync\" \
+              --no-appstream \
+              --verbose \
+              zed-appdir \
+              \"\$OUTPUT_FILENAME\"
+
+            # Generate zsync file for updates
+            if [ -f \"\$OUTPUT_FILENAME\" ]; then
+              echo \"AppImage created successfully: \$OUTPUT_FILENAME\"
+              ls -la \"\$OUTPUT_FILENAME\"
+            else
+              echo \"Failed to create AppImage\"
+              exit 1
+            fi
           "
 
-      - name: Upload package artifacts
+      - name: Upload AppImage artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: zed-git-debian-package
-          path: zed-git-debian-amd64.deb
+          name: zed-appimage
+          path: "Zed-*.AppImage"
+
+      - name: Upload zsync artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: zed-zsync
+          path: "Zed-*.AppImage.zsync"
 
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: zed-git-debian-amd64.deb
+          files: |
+            Zed-*.AppImage
+            Zed-*.AppImage.zsync
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
