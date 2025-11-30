@@ -60,17 +60,24 @@ jobs:
             # Install rustup and rust
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             source ~/.cargo/env
+            
+            # Install mold linker for faster, more reliable linking
+            wget https://github.com/rui314/mold/releases/download/v2.40.4/mold-2.40.4-x86_64.tar.gz
+            tar -xzf mold-2.40.4-x86_64.tar.gz
+            cp mold-2.40.4-x86_64/mold /usr/local/bin/
+            chmod +x /usr/local/bin/mold
+            export PATH="/usr/local/bin:$PATH"
 
             # Clone the zed repository
             git clone --depth 1 https://github.com/zed-industries/zed.git
             cd zed
 
             # Set environment variables for GLES support and goldmont-plus optimization
-            export RUSTFLAGS='--cfg gles'
+            export RUSTFLAGS='--cfg gles -C link-arg=-fuse-ld=mold'
             export CFLAGS='-march=goldmont-plus -mtune=goldmont-plus'
             export CXXFLAGS='-march=goldmont-plus -mtune=goldmont-plus'
 
-            # Build zed with release profile
+            # Build zed with release profile using mold linker
             cargo build --release --package zed --package cli
 
             # Create AppDir structure
