@@ -19,19 +19,24 @@ jobs:
 
             # Install base tools
             pacman -Syu --noconfirm
-            pacman -S --noconfirm base-devel git
+            pacman -S --noconfirm base-devel git sudo
+
+            # Create build user
+            useradd -m -s /bin/bash builduser
+            echo 'builduser ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
 
             # Download zed-git PKGBUILD from AUR
             git clone https://aur.archlinux.org/zed-git.git
             cd zed-git
+            chown -R builduser:builduser .
 
             # Add optimization flags
             sed -i 's/CFLAGS+=/CFLAGS+= -march=goldmont-plus -mtune=goldmont-plus /g' PKGBUILD
             sed -i 's/CXXFLAGS+=/CXXFLAGS+= -march=goldmont-plus -mtune=goldmont-plus /g' PKGBUILD
             sed -i 's/RUSTFLAGS+=\(--remap-path-prefix \$PWD=\/\)/RUSTFLAGS+=--cfg gles \1/g' PKGBUILD
 
-            # Build and install
-            makepkg -si --noconfirm
+            # Build and install as non-root user
+            sudo -u builduser makepkg -si --noconfirm
 
             # Copy package to output
             cp *.pkg.tar.* /tmp/
