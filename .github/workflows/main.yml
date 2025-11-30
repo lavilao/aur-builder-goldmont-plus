@@ -1,4 +1,4 @@
-name: Build and Release zed-git
+name: Build and Release zed-git (Debian)
 
 on:
   workflow_dispatch:
@@ -12,41 +12,108 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Build zed-git package
+      - name: Build zed-git for Debian
         run: |
-          docker run --rm archlinux:latest /bin/bash -c "
+          docker run --rm ubuntu:22.04 /bin/bash -c "
             set -e
 
-            # Install base tools
-            pacman -Syu --noconfirm
-            pacman -S --noconfirm base-devel git
+            # Update and install base tools and dependencies
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              build-essential \
+              gcc \
+              g++ \
+              libasound2-dev \
+              libfontconfig-dev \
+              libwayland-dev \
+              libx11-xcb-dev \
+              libxkbcommon-x11-dev \
+              libssl-dev \
+              libzstd-dev \
+              libvulkan1 \
+              libgit2-dev \
+              make \
+              cmake \
+              clang \
+              jq \
+              git \
+              curl \
+              gettext-base \
+              elfutils \
+              libsqlite3-dev \
+              musl-tools \
+              musl-dev \
+              pkg-config \
+              nodejs \
+              npm \
+              protobuf-compiler \
+              libvulkan-dev \
+              libvulkan1 \
+              vulkan-validationlayers-dev \
+              libxcb1-dev \
+              libxkbcommon-dev \
+              ca-certificates \
+              gnupg
 
-            # Download zed-git PKGBUILD from AUR
-            git clone https://aur.archlinux.org/zed-git.git
-            cd zed-git
+            # Install rustup and rust
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            source ~/.cargo/env
 
-            # Add optimization flags
-            sed -i 's/CFLAGS+=/CFLAGS+= -march=goldmont-plus -mtune=goldmont-plus /g' PKGBUILD
-            sed -i 's/CXXFLAGS+=/CXXFLAGS+= -march=goldmont-plus -mtune=goldmont-plus /g' PKGBUILD
-            sed -i 's/RUSTFLAGS+="--remap-path-prefix $PWD=\/"/RUSTFLAGS+="--cfg gles --remap-path-prefix $PWD=\/"/g' PKGBUILD
+            # Clone the zed repository
+            git clone --depth 1 https://github.com/zed-industries/zed.git
+            cd zed
 
-            # Build and install
-            makepkg -si --noconfirm
+            # Set environment variables for GLES support and goldmont-plus optimization
+            export RUSTFLAGS='--cfg gles'
+            export CFLAGS='-march=goldmont-plus -mtune=goldmont-plus'
+            export CXXFLAGS='-march=goldmont-plus -mtune=goldmont-plus'
 
-            # Copy package to output
-            cp *.pkg.tar.* /tmp/
+            # Build zed with release profile
+            cargo build --release --package zed --package cli
+
+            # Create a simple packaging structure
+            mkdir -p /tmp/zed-debian-build/usr/bin
+            mkdir -p /tmp/zed-debian-build/usr/lib/zed
+            cp target/release/cli /tmp/zed-debian-build/usr/bin/zed
+            cp target/release/zed /tmp/zed-debian-build/usr/lib/zed/zed-editor
+
+            # Create a simple .deb package
+            cd /tmp
+            mkdir -p zed-debian-package/DEBIAN
+            mkdir -p zed-debian-package/usr/bin
+            mkdir -p zed-debian-package/usr/lib/zed
+
+            # Create control file
+            cat > zed-debian-package/DEBIAN/control << 'EOF'
+            Package: zed-git
+            Version: 1.0.0-custom
+            Section: devel
+            Priority: optional
+            Architecture: amd64
+            Depends: libasound2, libfontconfig1, libwayland-client0, libx11-xcb1, libxkbcommon0, libssl3, libzstd1, libvulkan1, libsqlite3-0, libxcb1, libxkbcommon-x11-0
+            Maintainer: Custom Build
+            Description: Zed Editor (Git version with GLES support)
+             A high-performance, multiplayer code editor from the creators of Atom and Tree-sitter
+            EOF
+
+            # Copy binaries
+            cp -r zed-debian-build/usr/* zed-debian-package/usr/
+
+            # Build the .deb package
+            dpkg-deb --build --root-owner-group zed-debian-package
+            mv zed-debian-package.deb zed-git-debian-amd64.deb
           "
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: zed-git-package
-          path: "*.pkg.tar.*"
+          name: zed-git-debian-package
+          path: zed-git-debian-amd64.deb
 
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: "*.pkg.tar.*"
+          files: zed-git-debian-amd64.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
