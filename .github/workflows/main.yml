@@ -62,11 +62,7 @@ jobs:
             source ~/.cargo/env
             
             # Install mold linker for faster, more reliable linking
-            wget https://github.com/rui314/mold/releases/download/v2.40.4/mold-2.40.4-x86_64.tar.gz
-            tar -xzf mold-2.40.4-x86_64.tar.gz
-            cp mold-2.40.4-x86_64/mold /usr/local/bin/
-            chmod +x /usr/local/bin/mold
-            export PATH="/usr/local/bin:$PATH"
+            apt-get install -y --no-install-recommends mold
 
             # Clone the zed repository
             git clone --depth 1 https://github.com/zed-industries/zed.git
