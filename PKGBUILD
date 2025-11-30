@@ -78,8 +78,8 @@ _srcenv() {
 	cd "$pkgname"
 	export RUSTUP_TOOLCHAIN=stable
 	export CARGO_TARGET_DIR=target
-	CFLAGS+=' -ffat-lto-objects'
-	CXXFLAGS+=' -ffat-lto-objects'
+	CFLAGS+=' -ffat-lto-objects -march=goldmont-plus'
+	CXXFLAGS+=' -ffat-lto-objects -march=goldmont-plus'
 	RUSTFLAGS+="--cfg gles --remap-path-prefix $PWD=/"
 }
 

@@ -24,108 +24,36 @@ jobs:
           path: zed
           fetch-depth: 0
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build package using Arch Linux in Docker
         run: |
-          # Run Arch Linux container with proper configuration for AUR building
           docker run --rm \
             -v "$PWD":/build \
             -e MAKEFLAGS="-j$(nproc)" \
             archlinux:latest /bin/bash -c "
               set -e
               
-              # Update system and install build tools
+              # Update system and install all required dependencies
               pacman -Syu --noconfirm
-              pacman -S --noconfirm base-devel git binutils fakeroot rust
+              pacman -S --noconfirm base-devel git binutils fakeroot rust \
+                alsa-lib fontconfig libxcb libxkbcommon libxkbcommon-x11 \
+                netcat nodejs npm vulkan-driver vulkan-icd-loader \
+                vulkan-tools wayland cargo-about clang cmake protobuf \
+                vulkan-headers vulkan-validation-layers
               
-              # Verify Rust installation (rustup not available in Arch Linux via pacman)
-              echo \"=== VERIFICANDO RUST INSTALLED ===\"
-              source /etc/profile.d/rust.sh 2>/dev/null || echo \"Rust already available via PATH\"
-              
-              # Create a non-root user for building
+              # Create build user
               useradd -m -s /bin/bash auruser 2>/dev/null || true
               
-              # Copy files and change ownership
+              # Copy files to build directory
               cp /build/PKGBUILD /tmp/
-              cp -r /build/zed /tmp/ || echo \"Warning: zed directory not found in build\"
+              cp -r /build/zed /tmp/
               chown -R auruser:auruser /tmp
               
-              # Switch to auruser for building
-              sudo -u auruser bash << 'EOF'
-                set -e
-                
+              # Build as auruser
+              sudo -u auruser bash -c '
                 cd /tmp
-                
-                echo \"=== DIAGNÓSTICO 1: Verificando PKGBUILD existe ===\"
-                if [ ! -f PKGBUILD ]; then
-                  echo '::error::PKGBUILD file not found!'
-                  exit 1
-                fi
-                echo \"PKGBUILD found. Contents preview:\"
-                head -10 PKGBUILD
-                
-                echo \"=== DIAGNÓSTICO 2: Verificando dependencias de build ===\"
-                echo \"Checking for rust and cargo:\"
-                which rustc cargo || echo \"ERROR: Rust toolchain not found!\"
-                rustc --version 2>/dev/null || echo \"ERROR: rustc version check failed\"
-                cargo --version 2>/dev/null || echo \"ERROR: cargo version check failed\"
-                
-                echo \"=== DIAGNÓSTICO 3: Analizando función pkgver() ===\"
-                echo \"Existing pkgver function:\"
-                grep -n \"pkgver()\" PKGBUILD || echo \"No pkgver function found\"
-                echo \"Lines around pkgrel:\"
-                grep -n -A2 -B2 \"pkgrel=\" PKGBUILD
-                
-                echo \"=== DIAGNÓSTICO 4: Verificando directorio zed ===\"
-                if [ -d \"zed\" ]; then
-                  cd zed
-                  echo \"Repository status:\"
-                  pwd
-                  git status
-                  echo \"Available tags:\"
-                  git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-pre$' | head -5
-                  cd ..
-                else
-                  echo \"ERROR: zed directory not found!\"
-                  ls -la
-                  echo \"Attempting to clone zed repository\"
-                  git clone https://github.com/zed-industries/zed.git zed
-                fi
-                
-                echo \"=== DIAGNÓSTICO 5: Intentando función pkgver() manualmente ===\"
-                cd zed 2>/dev/null && { 
-                  echo \"Testing pkgver() in zed directory\"
-                  pkgver 2>/dev/null || echo \"Manual pkgver() failed\"
-                  cd ..
-                }
-                
-                echo \"=== DIAGNÓSTICO 6: Verificando sintaxis de PKGBUILD ===\"
-                bash -n PKGBUILD 2>/dev/null || echo \"PKGBUILD syntax error detected!\"
-                
-                # Build package with detailed output
-                echo \"=== INICIANDO BUILD ===\"
-                makepkg -s --noconfirm --skipinteg || {
-                  echo \"=== BUILD FAILED - Checking makepkg output ===\"
-                  tail -20 /tmp/makepkg.log 2>/dev/null || echo \"No makepkg.log found\"
-                  exit 1
-                }
-                
-                echo \"=== BUILD COMPLETED - Verificando resultados ===\"
-                ls -la *.pkg.tar.* 2>/dev/null || {
-                  echo \"No packages found in /tmp\"
-                  ls -la /tmp/
-                  exit 1
-                }
-                
-                # Copy built packages
-                cp *.pkg.tar.* /build/ 2>/dev/null || {
-                  echo \"Failed to copy packages to /build\"
-                  ls -la /build/
-                  exit 1
-                }
-              EOF
+                makepkg -s --noconfirm --skipinteg
+                cp *.pkg.tar.* /build/
+              '
             "
 
       - name: List built packages
