@@ -28,7 +28,7 @@ jobs:
             # Add optimization flags
             sed -i 's/CFLAGS+=/CFLAGS+= -march=goldmont-plus -mtune=goldmont-plus /g' PKGBUILD
             sed -i 's/CXXFLAGS+=/CXXFLAGS+= -march=goldmont-plus -mtune=goldmont-plus /g' PKGBUILD
-            sed -i 's/--cfg gles/--cfg gles/g' PKGBUILD
+            sed -i 's/RUSTFLAGS+="--cfg gles/RUSTFLAGS+="--cfg gles/g' PKGBUILD
             
             # Build and install
             makepkg -si --noconfirm
@@ -38,7 +38,7 @@ jobs:
           "
           
       - name: Upload package artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: zed-git-package
           path: "*.pkg.tar.*"
