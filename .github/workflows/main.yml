@@ -1,4 +1,4 @@
-name: Build and Release Arch Linux Packages
+name: Build and Release zed-git
 
 on:
   workflow_dispatch:
@@ -12,53 +12,36 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Checkout zed repository
-        uses: actions/checkout@v4
-        with:
-          repository: zed-industries/zed
-          path: zed
-          fetch-depth: 0
-
-      - name: Build package using Arch Linux in Docker
+      - name: Build zed-git package
         run: |
-          docker run --rm \
-            -v "$PWD":/build \
-            -e MAKEFLAGS="-j$(nproc)" \
-            archlinux:latest /bin/bash -c "
-              set -e
-              
-              # Update system and install all required dependencies
-              pacman -Syu --noconfirm
-              pacman -S --noconfirm base-devel git binutils fakeroot rust \
-                alsa-lib fontconfig libxcb libxkbcommon libxkbcommon-x11 \
-                netcat nodejs npm vulkan-driver vulkan-icd-loader \
-                vulkan-tools wayland cargo-about clang cmake protobuf \
-                vulkan-headers vulkan-validation-layers
-              
-              # Create build user
-              useradd -m -s /bin/bash auruser 2>/dev/null || true
-              
-              # Copy files to build directory
-              cp /build/PKGBUILD /tmp/
-              cp -r /build/zed /tmp/
-              chown -R auruser:auruser /tmp
-              
-              # Build as auruser
-              sudo -u auruser bash -c '
-                cd /tmp
-                makepkg -s --noconfirm --skipinteg
-                cp *.pkg.tar.* /build/
-              '
-            "
-
-      - name: List built packages
-        run: |
-          ls -la *.pkg.tar.* 2>/dev/null || echo "No packages found"
+          docker run --rm archlinux:latest /bin/bash -c "
+            set -e
+            
+            # Install base tools
+            pacman -Syu --noconfirm
+            pacman -S --noconfirm base-devel git
+            
+            # Download zed-git PKGBUILD from AUR
+            git clone https://aur.archlinux.org/zed-git.git
+            cd zed-git
+            
+            # Add optimization flags
+            sed -i 's/CFLAGS+=/CFLAGS+= -march=goldmont-plus -mtune=goldmont-plus /g' PKGBUILD
+            sed -i 's/CXXFLAGS+=/CXXFLAGS+= -march=goldmont-plus -mtune=goldmont-plus /g' PKGBUILD
+            sed -i 's/--cfg gles/--cfg gles/g' PKGBUILD
+            
+            # Build and install
+            makepkg -si --noconfirm
+            
+            # Copy package to output
+            cp *.pkg.tar.* /tmp/
+          "
+          
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: zed-git-package
+          path: "*.pkg.tar.*"
 
       - name: Release
         uses: softprops/action-gh-release@v1
