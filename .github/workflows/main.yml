@@ -62,33 +62,33 @@ jobs:
             Name=Zed
             Comment=A high-performance, multiplayer code editor
             Exec=zed
-          Icon=zed
-          Type=Application
-          Categories=Development;IDE;TextEditor;
-          StartupNotify=true
-          StartupWMClass=Zed
-          MimeType=text/plain;text/html;text/css;text/javascript;text/xml;text/x-python;text/x-java-source;text/x-c++src;text/x-csrc;text/x-chdr;text/x-java;
-          EOF
+            Icon=zed
+            Type=Application
+            Categories=Development;IDE;TextEditor;
+            StartupNotify=true
+            StartupWMClass=Zed
+            MimeType=text/plain;text/html;text/css;text/javascript;text/xml;text/x-python;text/x-java-source;text/x-c++src;text/x-csrc;text/x-chdr;text/x-java;
+            EOF
 
             # Copy icon
             cp crates/zed/resources/app-icon.png /tmp/zed-appdir/usr/share/icons/hicolor/256x256/apps/zed.png
 
-            # Create AppRun script
+            # Create AppRun script with properly escaped characters
             cat > /tmp/zed-appdir/AppRun << 'EOF'
             #!/bin/sh
-            HERE=\"$(dirname \"$(readlink -f \"\$0\")\")\"
+            HERE=\"\$(dirname \"\$(readlink -f \"\$0\")\")\"
             export PATH=\"\$HERE/usr/bin:\$PATH\"
             export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"
             exec \"\$HERE/usr/bin/zed\" \"\$@\"
-          EOF
-                    chmod +x /tmp/zed-appdir/AppRun
+            EOF
+            chmod +x /tmp/zed-appdir/AppRun
 
             # Download appimagetool
             curl -L -o /tmp/appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
             chmod +x /tmp/appimagetool
 
             # Generate version string for filename
-            ZED_VERSION=\"$(git -C zed describe --tags --always --abbrev=7 2>/dev/null || echo \"git-\$(git -C zed rev-parse --short HEAD)\")\"
+            ZED_VERSION=\"\$(git -C zed describe --tags --always --abbrev=7 2>/dev/null || echo \"git-\$(git -C zed rev-parse --short HEAD)\")\"
             OUTPUT_FILENAME=\"Zed-\${ZED_VERSION}-x86_64.AppImage\"
 
             # Create AppImage with update support
