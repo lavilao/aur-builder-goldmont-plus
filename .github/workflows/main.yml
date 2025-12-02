@@ -14,96 +14,114 @@ jobs:
     steps:
       - name: Build zed-git AppImage
         run: |
-          docker run --rm ubuntu:22.04 /bin/bash -c "
-            set -e
+          # Create a build script to avoid here-document issues
+          cat > /tmp/build-zed.sh << 'EOFSCRIPT'
+          #!/bin/bash
+          set -e
 
-            # Update and install base tools and dependencies
-            apt-get update
-            apt-get install -y --no-install-recommends build-essential gcc g++ libasound2-dev libfontconfig-dev libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev libssl-dev libzstd-dev libvulkan1 libgit2-dev make cmake clang jq git curl gettext-base elfutils libsqlite3-dev musl-tools musl-dev pkg-config nodejs npm protobuf-compiler libvulkan-dev libvulkan1 vulkan-validationlayers-dev libxcb1-dev libxkbcommon-dev ca-certificates gnupg squashfs-tools zsync
+          # Update and install base tools and dependencies
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential gcc g++ libasound2-dev libfontconfig-dev libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev libssl-dev libzstd-dev libvulkan1 libgit2-dev make cmake clang jq git curl gettext-base elfutils libsqlite3-dev musl-tools musl-dev pkg-config nodejs npm protobuf-compiler libvulkan-dev libvulkan1 vulkan-validationlayers-dev libxcb1-dev libxkbcommon-dev ca-certificates gnupg squashfs-tools zsync
 
-            # Install rustup and rust
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-            source ~/.cargo/env
+          # Install rustup and rust
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source ~/.cargo/env
 
-            # Install mold linker for faster, more reliable linking
-            apt-get install -y --no-install-recommends mold
+          # Install mold linker for faster, more reliable linking
+          apt-get install -y --no-install-recommends mold
 
-            # Clone zed repository
-            git clone --depth 1 https://github.com/zed-industries/zed.git
-            cd zed
+          # Clone zed repository
+          git clone --depth 1 https://github.com/zed-industries/zed.git
+          cd zed
 
-            # Create .cargo/config.toml for proper Rust configuration
-            mkdir -p .cargo
-            cat > .cargo/config.toml << 'EOF'
-            [build]
-            rustflags = ["--cfg", "gles", "-C", "link-arg=-fuse-ld=mold"]
-            EOF
+          # Create .cargo/config.toml for proper Rust configuration
+          mkdir -p .cargo
+          cat > .cargo/config.toml << 'EOF'
+          [build]
+          rustflags = ["--cfg", "gles", "-C", "link-arg=-fuse-ld=mold"]
+          EOF
 
-            # Set environment variables for goldmont-plus optimization
-            export CFLAGS='-march=goldmont-plus -mtune=goldmont-plus'
-            export CXXFLAGS='-march=goldmont-plus -mtune=goldmont-plus'
+          # Set environment variables for goldmont-plus optimization
+          export CFLAGS='-march=goldmont-plus -mtune=goldmont-plus'
+          export CXXFLAGS='-march=goldmont-plus -mtune=goldmont-plus'
 
-            # Build zed with release profile using mold linker
-            cargo build --release --package zed --package cli
+          # Build zed with release profile using mold linker
+          cargo build --release --package zed --package cli
 
-            # Create AppDir structure
-            mkdir -p /tmp/zed-appdir/usr/bin
-            mkdir -p /tmp/zed-appdir/usr/lib/zed
-            mkdir -p /tmp/zed-appdir/usr/share/applications
-            mkdir -p /tmp/zed-appdir/usr/share/icons/hicolor/256x256/apps
+          # Create AppDir structure
+          mkdir -p /tmp/zed-appdir/usr/bin
+          mkdir -p /tmp/zed-appdir/usr/lib/zed
+          mkdir -p /tmp/zed-appdir/usr/share/applications
+          mkdir -p /tmp/zed-appdir/usr/share/icons/hicolor/256x256/apps
 
-            # Copy binaries to AppDir
-            cp target/release/cli /tmp/zed-appdir/usr/bin/zed
-            cp target/release/zed /tmp/zed-appdir/usr/lib/zed/zed-editor
+          # Copy binaries to AppDir
+          cp target/release/cli /tmp/zed-appdir/usr/bin/zed
+          cp target/release/zed /tmp/zed-appdir/usr/lib/zed/zed-editor
 
-            # Create .desktop file for AppImage
-            cat > /tmp/zed-appdir/usr/share/applications/dev.zed.Zed-Dev.desktop << 'EOF'
-            [Desktop Entry]
-            Name=Zed
-            Comment=A high-performance, multiplayer code editor
-            Exec=zed
-            Icon=zed
-            Type=Application
-            Categories=Development;IDE;TextEditor;
-            StartupNotify=true
-            StartupWMClass=Zed
-            MimeType=text/plain;text/html;text/css;text/javascript;text/xml;text/x-python;text/x-java-source;text/x-c++src;text/x-csrc;text/x-chdr;text/x-java;
-            EOF
+          # Create .desktop file for AppImage
+          cat > /tmp/zed-appdir/usr/share/applications/dev.zed.Zed-Dev.desktop << 'EOF'
+          [Desktop Entry]
+          Name=Zed
+          Comment=A high-performance, multiplayer code editor
+          Exec=zed
+          Icon=zed
+          Type=Application
+          Categories=Development;IDE;TextEditor;
+          StartupNotify=true
+          StartupWMClass=Zed
+          MimeType=text/plain;text/html;text/css;text/javascript;text/xml;text/x-python;text/x-java-source;text/x-c++src;text/x-csrc;text/x-chdr;text/x-java;
+          EOF
 
-            # Copy icon
-            cp crates/zed/resources/app-icon.png /tmp/zed-appdir/usr/share/icons/hicolor/256x256/apps/zed.png
+          # Copy icon
+          cp crates/zed/resources/app-icon.png /tmp/zed-appdir/usr/share/icons/hicolor/256x256/apps/zed.png
 
-            # Create AppRun script with properly escaped characters
-            cat > /tmp/zed-appdir/AppRun << 'EOF'
-            #!/bin/sh
-            HERE=\"\$(dirname \"\$(readlink -f \"\$0\")\")\"
-            export PATH=\"\$HERE/usr/bin:\$PATH\"
-            export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"
-            exec \"\$HERE/usr/bin/zed\" \"\$@\"
-            EOF
-            chmod +x /tmp/zed-appdir/AppRun
+          # Create AppRun script with properly escaped characters
+          cat > /tmp/zed-appdir/AppRun << 'EOF'
+          #!/bin/sh
+          HERE="$(dirname "$(readlink -f "$0")")"
+          export PATH="$HERE/usr/bin:$PATH"
+          export LD_LIBRARY_PATH="$HERE/usr/lib:$LD_LIBRARY_PATH"
+          exec "$HERE/usr/bin/zed" "$@"
+          EOF
+          chmod +x /tmp/zed-appdir/AppRun
 
-            # Download appimagetool
-            curl -L -o /tmp/appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-            chmod +x /tmp/appimagetool
+          # Download appimagetool
+          curl -L -o /tmp/appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /tmp/appimagetool
 
-            # Generate version string for filename
-            ZED_VERSION=\"\$(git -C zed describe --tags --always --abbrev=7 2>/dev/null || echo \"git-\$(git -C zed rev-parse --short HEAD)\")\"
-            OUTPUT_FILENAME=\"Zed-\${ZED_VERSION}-x86_64.AppImage\"
+          # Generate version string for filename
+          ZED_VERSION="$(git -C zed describe --tags --always --abbrev=7 2>/dev/null || echo "git-$(git -C zed rev-parse --short HEAD)")"
+          OUTPUT_FILENAME="Zed-${ZED_VERSION}-x86_64.AppImage"
 
-            # Create AppImage with update support
-            cd /tmp
-            /tmp/appimagetool --updateinformation \"gh-releases-zsync|lavilao|aur-builder-goldmont-plus|appimage|Zed-x86_64.AppImage.zsync\" --no-appstream --verbose zed-appdir \"\$OUTPUT_FILENAME\"
+          # Create AppImage with update support
+          cd /tmp
+          /tmp/appimagetool --updateinformation "gh-releases-zsync|lavilao|aur-builder-goldmont-plus|appimage|Zed-x86_64.AppImage.zsync" --no-appstream --verbose zed-appdir "$OUTPUT_FILENAME"
 
-            # Generate zsync file for updates
-            if [ -f \"\$OUTPUT_FILENAME\" ]; then
-              echo \"AppImage created successfully: \$OUTPUT_FILENAME\"
-              ls -la \"\$OUTPUT_FILENAME\"
-            else
-              echo \"Failed to create AppImage\"
-              exit 1
-            fi
-          "
+          # Generate zsync file for updates
+          if [ -f "$OUTPUT_FILENAME" ]; then
+            echo "AppImage created successfully: $OUTPUT_FILENAME"
+            ls -la "$OUTPUT_FILENAME"
+          else
+            echo "Failed to create AppImage"
+            exit 1
+          fi
+          EOFSCRIPT
+          
+          # Run the build script in Docker with proper setup
+          docker run --rm \
+            -v $(pwd):/workspace \
+            -v /tmp:/tmp-build \
+            ubuntu:22.04 /bin/bash -c "
+              set -e
+              chmod +x /tmp-build/build-zed.sh
+              cd /tmp-build
+              ./build-zed.sh
+              
+              # Copy results to workspace
+              cp /tmp/*.AppImage /workspace/ 2>/dev/null || true
+              cp /tmp/*.zsync /workspace/ 2>/dev/null || true
+            "
       - name: Upload AppImage artifacts
         uses: actions/upload-artifact@v4
         with:
