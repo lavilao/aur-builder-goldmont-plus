@@ -19,57 +19,27 @@ jobs:
 
             # Update and install base tools and dependencies
             apt-get update
-            apt-get install -y --no-install-recommends \
-              build-essential \
-              gcc \
-              g++ \
-              libasound2-dev \
-              libfontconfig-dev \
-              libwayland-dev \
-              libx11-xcb-dev \
-              libxkbcommon-x11-dev \
-              libssl-dev \
-              libzstd-dev \
-              libvulkan1 \
-              libgit2-dev \
-              make \
-              cmake \
-              clang \
-              jq \
-              git \
-              curl \
-              gettext-base \
-              elfutils \
-              libsqlite3-dev \
-              musl-tools \
-              musl-dev \
-              pkg-config \
-              nodejs \
-              npm \
-              protobuf-compiler \
-              libvulkan-dev \
-              libvulkan1 \
-              vulkan-validationlayers-dev \
-              libxcb1-dev \
-              libxkbcommon-dev \
-              ca-certificates \
-              gnupg \
-              squashfs-tools \
-              zsync
+            apt-get install -y --no-install-recommends build-essential gcc g++ libasound2-dev libfontconfig-dev libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev libssl-dev libzstd-dev libvulkan1 libgit2-dev make cmake clang jq git curl gettext-base elfutils libsqlite3-dev musl-tools musl-dev pkg-config nodejs npm protobuf-compiler libvulkan-dev libvulkan1 vulkan-validationlayers-dev libxcb1-dev libxkbcommon-dev ca-certificates gnupg squashfs-tools zsync
 
             # Install rustup and rust
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             source ~/.cargo/env
-            
+
             # Install mold linker for faster, more reliable linking
             apt-get install -y --no-install-recommends mold
 
-            # Clone the zed repository
+            # Clone zed repository
             git clone --depth 1 https://github.com/zed-industries/zed.git
             cd zed
 
-            # Set environment variables for GLES support and goldmont-plus optimization
-            export RUSTFLAGS='--cfg gles -C link-arg=-fuse-ld=mold'
+            # Create .cargo/config.toml for proper Rust configuration
+            mkdir -p .cargo
+            cat > .cargo/config.toml << 'EOF'
+            [build]
+            rustflags = ["--cfg", "gles", "-C", "link-arg=-fuse-ld=mold"]
+            EOF
+
+            # Set environment variables for goldmont-plus optimization
             export CFLAGS='-march=goldmont-plus -mtune=goldmont-plus'
             export CXXFLAGS='-march=goldmont-plus -mtune=goldmont-plus'
 
@@ -92,13 +62,13 @@ jobs:
             Name=Zed
             Comment=A high-performance, multiplayer code editor
             Exec=zed
-            Icon=zed
-            Type=Application
-            Categories=Development;IDE;TextEditor;
-            StartupNotify=true
-            StartupWMClass=Zed
-            MimeType=text/plain;text/html;text/css;text/javascript;text/xml;text/x-python;text/x-java-source;text/x-c++src;text/x-csrc;text/x-chdr;text/x-java;
-            EOF
+          Icon=zed
+          Type=Application
+          Categories=Development;IDE;TextEditor;
+          StartupNotify=true
+          StartupWMClass=Zed
+          MimeType=text/plain;text/html;text/css;text/javascript;text/xml;text/x-python;text/x-java-source;text/x-c++src;text/x-csrc;text/x-chdr;text/x-java;
+          EOF
 
             # Copy icon
             cp crates/zed/resources/app-icon.png /tmp/zed-appdir/usr/share/icons/hicolor/256x256/apps/zed.png
@@ -106,29 +76,24 @@ jobs:
             # Create AppRun script
             cat > /tmp/zed-appdir/AppRun << 'EOF'
             #!/bin/sh
-            HERE=\"$(dirname \"$(readlink -f \"\$0\")\")
+            HERE=\"$(dirname \"$(readlink -f \"\$0\")\")\"
             export PATH=\"\$HERE/usr/bin:\$PATH\"
             export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"
             exec \"\$HERE/usr/bin/zed\" \"\$@\"
-            EOF
-            chmod +x /tmp/zed-appdir/AppRun
+          EOF
+                    chmod +x /tmp/zed-appdir/AppRun
 
             # Download appimagetool
             curl -L -o /tmp/appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
             chmod +x /tmp/appimagetool
 
             # Generate version string for filename
-            ZED_VERSION=\$(git -C zed describe --tags --always --abbrev=7 2>/dev/null || echo \"git-\$(git -C zed rev-parse --short HEAD)\")
+            ZED_VERSION=\"$(git -C zed describe --tags --always --abbrev=7 2>/dev/null || echo \"git-\$(git -C zed rev-parse --short HEAD)\")\"
             OUTPUT_FILENAME=\"Zed-\${ZED_VERSION}-x86_64.AppImage\"
 
             # Create AppImage with update support
             cd /tmp
-            /tmp/appimagetool \
-              --updateinformation \"gh-releases-zsync|lavilao|aur-builder-goldmont-plus|appimage|Zed-x86_64.AppImage.zsync\" \
-              --no-appstream \
-              --verbose \
-              zed-appdir \
-              \"\$OUTPUT_FILENAME\"
+            /tmp/appimagetool --updateinformation \"gh-releases-zsync|lavilao|aur-builder-goldmont-plus|appimage|Zed-x86_64.AppImage.zsync\" --no-appstream --verbose zed-appdir \"\$OUTPUT_FILENAME\"
 
             # Generate zsync file for updates
             if [ -f \"\$OUTPUT_FILENAME\" ]; then
@@ -139,7 +104,6 @@ jobs:
               exit 1
             fi
           "
-
       - name: Upload AppImage artifacts
         uses: actions/upload-artifact@v4
         with:
