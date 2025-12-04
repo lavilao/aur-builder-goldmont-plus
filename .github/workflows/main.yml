@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Build zed-git package
         run: |
-          docker run --rm archlinux:latest /bin/bash -c "
+          docker run --rm archlinux:latest /bin/bash -c '
             set -e
 
             # Install base tools
@@ -23,24 +23,30 @@ jobs:
 
             # Create build user
             useradd -m -s /bin/bash builduser
-            echo 'builduser ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+            echo "builduser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
             # Download zed-git PKGBUILD from AUR
             git clone https://aur.archlinux.org/zed-git.git
             cd zed-git
             chown -R builduser:builduser .
 
-            # Add optimization flags - modify the existing CFLAGS/CXXFLAGS assignments
-            sed -i "/CFLAGS+=/ s/\(CFLAGS+=.*\)'/\1 -march=goldmont-plus -mtune=goldmont-plus'/" PKGBUILD
-            sed -i "/CXXFLAGS+=/ s/\(CXXFLAGS+=.*\)'/\1 -march=goldmont-plus -mtune=goldmont-plus'/" PKGBUILD
-            sed -i 's|RUSTFLAGS.*|RUSTFLAGS+="--cfg gles --remap-path-prefix \$PWD=/"|' PKGBUILD
+            # Add optimization flags - append inside quotes
+            # \047 is octal for single quote, \042 for double quote
+            sed -i "/CFLAGS+=/ s/\(CFLAGS+=.*\)\047/\1 -march=goldmont-plus -mtune=goldmont-plus\047/" PKGBUILD
+            sed -i "/CXXFLAGS+=/ s/\(CXXFLAGS+=.*\)\047/\1 -march=goldmont-plus -mtune=goldmont-plus\047/" PKGBUILD
+            sed -i "s|RUSTFLAGS.*|RUSTFLAGS+=\042 --cfg gles --remap-path-prefix \$PWD=/\042|" PKGBUILD
+
+            # Show the modified lines for verification
+            echo "=== Modified compiler flags in PKGBUILD ==="
+            grep -E "^(C|CXX)FLAGS|RUSTFLAGS" PKGBUILD
+            echo "==========================================="
 
             # Build and install as non-root user
             sudo -u builduser makepkg -si --noconfirm
 
             # Copy package to output
             cp *.pkg.tar.* /tmp/
-          "
+          '
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@v4
