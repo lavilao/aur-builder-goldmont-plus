@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [cli, editor-opengl]
+        target: [editor-opengl]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,12 +37,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build
-        run: |
-          if [ "${{ matrix.target }}" == "cli" ]; then
-            cargo build --release --bin zed
-          else
-            cargo build --release --bin zed
-          fi
+        run: cargo build --release --bin zed
         env:
           RUSTFLAGS: --cfg gles --remap-path-prefix $PWD=/
 
