@@ -1,63 +1,53 @@
-name: Build and Release zed-git
+name: Build Zed Binaries
 
 on:
+  workflow_call:
+    inputs:
+      repository:
+        required: true
+        type: string
+      ref:
+        required: true
+        type: string
   workflow_dispatch:
-  push:
-    branches: ["main"]
-    tags: ["v*"]
+    inputs:
+      repository:
+        description: 'Repository to build from'
+        required: true
+        type: string
+      ref:
+        description: 'Ref to build from'
+        required: true
+        type: string
 
 jobs:
-  build-and-release:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    strategy:
+      matrix:
+        target: [cli, editor-opengl]
     steps:
-      - name: Build zed-git package
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repository || github.event.inputs.repository }}
+          ref: ${{ inputs.ref || github.event.inputs.ref }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
         run: |
-          docker run --rm archlinux:latest /bin/bash -c '
-            set -e
+          if [ "${{ matrix.target }}" == "cli" ]; then
+            cargo build --release --bin zed
+          else
+            cargo build --release --bin zed --features opengl
+          fi
+        env:
+          RUSTFLAGS: --cfg gles --remap-path-prefix $PWD=/
 
-            # Install base tools
-            pacman -Syu --noconfirm
-            pacman -S --noconfirm base-devel git sudo
-
-            # Create build user
-            useradd -m -s /bin/bash builduser
-            echo "builduser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-
-            # Download zed-git PKGBUILD from AUR
-            git clone https://aur.archlinux.org/zed-git.git
-            cd zed-git
-            chown -R builduser:builduser .
-
-            # Add optimization flags - append inside quotes
-            # \047 is octal for single quote, \042 for double quote
-            sed -i "/CFLAGS+=/ s/\(CFLAGS+=.*\)\047/\1 -march=goldmont-plus -mtune=goldmont-plus\047/" PKGBUILD
-            sed -i "/CXXFLAGS+=/ s/\(CXXFLAGS+=.*\)\047/\1 -march=goldmont-plus -mtune=goldmont-plus\047/" PKGBUILD
-            sed -i "s|RUSTFLAGS.*|RUSTFLAGS+=\042 --cfg gles --remap-path-prefix \$PWD=/\042|" PKGBUILD
-
-            # Show the modified lines for verification
-            echo "=== Modified compiler flags in PKGBUILD ==="
-            grep -E "^(C|CXX)FLAGS|RUSTFLAGS" PKGBUILD
-            echo "==========================================="
-
-            # Build and install as non-root user
-            sudo -u builduser makepkg -si --noconfirm
-
-            # Copy package to output
-            cp *.pkg.tar.* /tmp/
-          '
-
-      - name: Upload package artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: zed-git-package
-          path: "*.pkg.tar.*"
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          files: "*.pkg.tar.*"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: zed-${{ matrix.target }}-linux
+          path: target/release/zed
