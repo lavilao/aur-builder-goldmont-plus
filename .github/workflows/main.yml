@@ -41,7 +41,7 @@ jobs:
           if [ "${{ matrix.target }}" == "cli" ]; then
             cargo build --release --bin zed
           else
-            cargo build --release --bin zed --features opengl
+            cargo build --release --bin zed --features zeta2
           fi
         env:
           RUSTFLAGS: --cfg gles --remap-path-prefix $PWD=/
