@@ -36,11 +36,10 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install system dependencies and mold linker
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            mold \
+          sudo apt-get install -y \
             libx11-dev \
             libxrandr-dev \
             libxinerama-dev \
@@ -56,19 +55,10 @@ jobs:
             libgles2-mesa-dev \
             libasound2-dev \
             libgtk-3-dev
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "zed-opengl"
-          cache-on-failure: true
-
       - name: Build
         run: cargo build --release --bin zed
         env:
-          RUSTFLAGS: "--cfg gles -C link-arg=-fuse-ld=mold --remap-path-prefix $PWD=/"
-          CARGO_BUILD_JOBS: "4"
-          CARGO_INCREMENTAL: "1"
+          RUSTFLAGS: "--cfg gles --remap-path-prefix $PWD=/"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
