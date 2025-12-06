@@ -55,13 +55,13 @@ jobs:
             libgles2-mesa-dev \
             libasound2-dev \
             libgtk-3-dev
-
       - name: Build
         run: cargo build --release --bin zed
         env:
           RUSTFLAGS: "--cfg gles --remap-path-prefix $PWD=/"
-          CARGO_BUILD_JOBS: "4"
-          CARGO_INCREMENTAL: "1"
+
+      - name: Strip debug symbols
+        run: strip target/release/zed
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
