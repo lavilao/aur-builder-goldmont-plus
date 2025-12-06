@@ -59,7 +59,9 @@ jobs:
       - name: Build
         run: cargo build --release --bin zed
         env:
-          RUSTFLAGS: "--cfg gles"
+          RUSTFLAGS: "--cfg gles --remap-path-prefix $PWD=/"
+          CARGO_BUILD_JOBS: "4"
+          CARGO_INCREMENTAL: "1"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
