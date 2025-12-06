@@ -49,6 +49,8 @@ jobs:
             libxcb-shape0-dev \
             libxcb-xfixes0-dev \
             libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libx11-xcb-dev \
             libegl1-mesa-dev \
             libgles2-mesa-dev \
             libasound2-dev \
@@ -57,7 +59,7 @@ jobs:
       - name: Build
         run: cargo build --release --bin zed
         env:
-          RUSTFLAGS: --cfg gles --remap-path-prefix $PWD=/
+          RUSTFLAGS: "--cfg gles"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
