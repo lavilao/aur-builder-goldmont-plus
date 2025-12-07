@@ -59,6 +59,8 @@ jobs:
         run: cargo build --release --bin zed
         env:
           RUSTFLAGS: "--cfg gles --remap-path-prefix $PWD=/"
+      - name: Strip binary
+        run: strip target/release/zed
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
