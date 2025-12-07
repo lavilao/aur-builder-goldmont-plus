@@ -19,6 +19,10 @@ on:
         description: 'Ref to build from'
         required: true
         type: string
+      release_tag:
+        description: 'Release tag to upload artifacts to (optional)'
+        required: false
+        type: string
 
 jobs:
   build:
@@ -40,31 +44,55 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxcb1-dev \
-            libxcb-render0-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            libxkbcommon-dev \
-            libxkbcommon-x11-dev \
-            libx11-xcb-dev \
-            libegl1-mesa-dev \
-            libgles2-mesa-dev \
+            gcc \
+            g++ \
             libasound2-dev \
-            libgtk-3-dev
+            libfontconfig-dev \
+            libwayland-dev \
+            libx11-xcb-dev \
+            libxkbcommon-x11-dev \
+            libssl-dev \
+            libzstd-dev \
+            libvulkan1 \
+            libgit2-dev \
+            make \
+            cmake \
+            clang \
+            jq \
+            git \
+            curl \
+            gettext-base \
+            elfutils \
+            libsqlite3-dev \
+            musl-tools \
+            musl-dev \
+            build-essential \
+            mold \
+            libstdc++-14-dev
+
       - name: Build
-        run: cargo build --release --bin zed
+        run: cargo build --release --package zed --package cli --package remote_server
         env:
-          RUSTFLAGS: "--cfg gles --remap-path-prefix $PWD=/"
+          RUSTFLAGS: '--cfg gles -C linker=clang -C link-arg=-fuse-ld=mold -C link-args=-Wl,--disable-new-dtags,-rpath,$ORIGIN/../lib --remap-path-prefix $PWD=/'
 
       - name: Strip debug symbols
-        run: strip target/release/zed
+        run: |
+          strip --strip-debug target/release/zed
+          strip --strip-debug target/release/cli
+          strip --strip-debug target/release/remote_server
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: zed-${{ matrix.target }}-linux
-          path: target/release/zed
+          path: |
+            target/release/zed
+            target/release/cli
+            target/release/remote_server
+
+      - name: Upload to Release
+        if: inputs.release_tag != ''
+        run: |
+          gh release upload ${{ inputs.release_tag }} target/release/zed target/release/cli target/release/remote_server
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
