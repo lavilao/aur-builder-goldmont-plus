@@ -35,9 +35,13 @@ jobs:
 
       - name: Patch Cargo.toml
         run: |
-          echo '' >> Cargo.toml
-          echo '[patch.crates-io]' >> Cargo.toml
-          echo 'blade-graphics = { git = "https://github.com/kvark/blade", rev = "a477ee17024d10477d4372483f5f4a2b294917c8" }' >> Cargo.toml
+          if ! grep -q '^\[patch.crates-io\]' Cargo.toml; then
+            echo '' >> Cargo.toml
+            echo '[patch.crates-io]' >> Cargo.toml
+          fi
+          if ! grep -q 'blade-graphics.*git.*https://github.com/kvark/blade' Cargo.toml; then
+            echo 'blade-graphics = { git = "https://github.com/kvark/blade", rev = "a477ee17024d10477d4372483f5f4a2b294917c8" }' >> Cargo.toml
+          fi
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
